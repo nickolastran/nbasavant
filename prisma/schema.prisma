@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Season {
+  id        Int    @id @default(autoincrement())
+  // "2024-25" — the canonical NBA season key
+  key       String @unique
+  startYear Int
+  endYear   Int
+  active    Boolean @default(false)
+
+  playerStats   PlayerStats[]
+  advancedStats AdvancedStats[]
+  teamStats     TeamStats[]
+  games         Game[]
+  shots         ShotData[]
+  gameLogs      PlayerGameLog[]
+
+  @@index([startYear])
+  @@map("seasons")
+}
+
+model Team {
+  id           Int    @id // NBA team id (1610612737...)
+  abbreviation String @unique
+  city         String
+  name         String
+  conference   String
+  division     String
+  primaryColor String @default("#1d428a")
+
+  players    Player[]
+  stats      TeamStats[]
+  homeGames  Game[]  @relation("home")
+  awayGames  Game[]  @relation("away")
+  gameLogs   PlayerGameLog[]
+  shots      ShotData[]
+
+  @@index([conference, division])
+  @@map("teams")
+}
+
+model Player {
+  id         Int      @id // NBA player id
+  firstName  String
+  lastName   String
+  fullName   String
+  position   String?
+  jersey     String?
+  heightIn   Int?
+  weightLb   Int?
+  birthDate  DateTime?
+  country    String?
+  draftYear  Int?
+  active     Boolean  @default(true)
+  teamId     Int?
+  team       Team?    @relation(fields: [teamId], references: [id])
+
+  stats         PlayerStats[]
+  advancedStats AdvancedStats[]
+  gameLogs      PlayerGameLog[]
+  shots         ShotData[]
+  defendedShots ShotData[] @relation("defender")
+
+  @@index([fullName])
+  @@index([teamId, active])
+  @@map("players")
+}
+
+/// Season totals + rate stats for one player-season (one row per player/season/team stint)
+model PlayerStats {
+  id       Int    @id @default(autoincrement())
+  playerId Int
+  seasonId Int
+  teamId   Int?
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  gp   Int   @default(0)
+  gs   Int   @default(0)
+  min  Float @default(0)
+  pts  Int   @default(0)
+  reb  Int   @default(0)
+  oreb Int   @default(0)
+  dreb Int   @default(0)
+  ast  Int   @default(0)
+  stl  Int   @default(0)
+  blk  Int   @default(0)
+  tov  Int   @default(0)
+  pf   Int   @default(0)
+  fgm  Int   @default(0)
+  fga  Int   @default(0)
+  fg3m Int   @default(0)
+  fg3a Int   @default(0)
+  ftm  Int   @default(0)
+  fta  Int   @default(0)
+
+  // Derived, stored so the explorer can sort on them in-database
+  ppg    Float @default(0)
+  rpg    Float @default(0)
+  apg    Float @default(0)
+  fgPct  Float @default(0)
+  fg3Pct Float @default(0)
+  ftPct  Float @default(0)
+  tsPct  Float @default(0)
+  efgPct Float @default(0)
+  usgPct Float @default(0)
+
+  @@unique([playerId, seasonId, teamId])
+  @@index([seasonId, ppg(sort: Desc)])
+  @@index([seasonId, tsPct(sort: Desc)])
+  @@map("player_stats")
+}
+
+/// PER/BPM/VORP-style metrics kept apart from the box score they derive from
+model AdvancedStats {
+  id       Int    @id @default(autoincrement())
+  playerId Int
+  seasonId Int
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  per   Float @default(0)
+  ortg  Float @default(0)
+  drtg  Float @default(0)
+  netRtg Float @default(0)
+  ows   Float @default(0)
+  dws   Float @default(0)
+  ws    Float @default(0)
+  ws48  Float @default(0)
+  obpm  Float @default(0)
+  dbpm  Float @default(0)
+  bpm   Float @default(0)
+  vorp  Float @default(0)
+  astPct Float @default(0)
+  rebPct Float @default(0)
+  stlPct Float @default(0)
+  blkPct Float @default(0)
+  tovPct Float @default(0)
+
+  @@unique([playerId, seasonId])
+  @@index([seasonId, bpm(sort: Desc)])
+  @@index([seasonId, per(sort: Desc)])
+  @@map("advanced_stats")
+}
+
+model Game {
+  id         Int      @id @default(autoincrement())
+  gameCode   String   @unique // "0022400123"
+  seasonId   Int
+  season     Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  date       DateTime
+  homeTeamId Int
+  awayTeamId Int
+  homeTeam   Team     @relation("home", fields: [homeTeamId], references: [id])
+  awayTeam   Team     @relation("away", fields: [awayTeamId], references: [id])
+  homeScore  Int      @default(0)
+  awayScore  Int      @default(0)
+  period     Int      @default(4)
+  status     String   @default("Final")
+
+  gameLogs   PlayerGameLog[]
+  shots      ShotData[]
+  plays      PlayByPlay[]
+
+  @@index([date(sort: Desc)])
+  @@index([seasonId, date(sort: Desc)])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+  @@map("games")
+}
+
+model PlayerGameLog {
+  id       Int      @id @default(autoincrement())
+  playerId Int
+  gameId   Int
+  seasonId Int
+  teamId   Int
+  player   Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  game     Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  season   Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team     Team     @relation(fields: [teamId], references: [id])
+  date     DateTime
+
+  started Boolean @default(false)
+  min     Float   @default(0)
+  pts     Int     @default(0)
+  reb     Int     @default(0)
+  oreb    Int     @default(0)
+  dreb    Int     @default(0)
+  ast     Int     @default(0)
+  stl     Int     @default(0)
+  blk     Int     @default(0)
+  tov     Int     @default(0)
+  pf      Int     @default(0)
+  fgm     Int     @default(0)
+  fga     Int     @default(0)
+  fg3m    Int     @default(0)
+  fg3a    Int     @default(0)
+  ftm     Int     @default(0)
+  fta     Int     @default(0)
+  plusMinus Int   @default(0)
+
+  @@unique([playerId, gameId])
+  @@index([playerId, date(sort: Desc)])
+  @@index([gameId])
+  @@map("player_game_logs")
+}
+
+/// One shot attempt. x/y are NBA tracking coords in tenths of a foot,
+/// origin at the basket, x in [-250, 250], y in [-50, 890].
+model ShotData {
+  id         Int      @id @default(autoincrement())
+  playerId   Int
+  gameId     Int
+  seasonId   Int
+  teamId     Int
+  defenderId Int?
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  game       Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  season     Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team       Team     @relation(fields: [teamId], references: [id])
+  defender   Player?  @relation("defender", fields: [defenderId], references: [id])
+
+  x          Int
+  y          Int
+  distanceFt Int
+  made       Boolean
+  value      Int      // 2 or 3
+  zone       String   // "Restricted Area", "Above the Break 3", ...
+  zoneArea   String   // "Center(C)", "Left Side(L)", ...
+  actionType String   // "Jump Shot", "Driving Layup", ...
+  period     Int
+  minsLeft   Int
+  secsLeft   Int
+  shotClock  Float?
+  defDistFt  Float?
+  date       DateTime
+
+  @@index([playerId, seasonId])
+  @@index([gameId])
+  @@index([seasonId, zone])
+  @@index([teamId, seasonId])
+  @@map("shot_data")
+}
+
+model TeamStats {
+  id       Int    @id @default(autoincrement())
+  teamId   Int
+  seasonId Int
+  team     Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  gp   Int   @default(0)
+  wins Int   @default(0)
+  losses Int @default(0)
+  pace Float @default(0)
+  ortg Float @default(0)
+  drtg Float @default(0)
+  netRtg Float @default(0)
+  efgPct Float @default(0)
+  tsPct  Float @default(0)
+  tovPct Float @default(0)
+  orebPct Float @default(0)
+  ftRate Float @default(0)
+  oppEfgPct Float @default(0)
+  oppTovPct Float @default(0)
+  drebPct Float @default(0)
+  sos    Float @default(0)
+  // Defensive rating allowed by opponent position, e.g. {"PG":112.4,...}
+  drtgByPosition Json?
+
+  @@unique([teamId, seasonId])
+  @@index([seasonId, netRtg(sort: Desc)])
+  @@map("team_stats")
+}
+
+model PlayByPlay {
+  id          Int    @id @default(autoincrement())
+  gameId      Int
+  game        Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  eventNum    Int
+  period      Int
+  clock       String // "10:32"
+  elapsedSec  Int    // seconds since tip-off, for sorting/filtering
+  teamId      Int?
+  playerId    Int?
+  description String
+  homeScore   Int
+  awayScore   Int
+  eventType   String // "SHOT", "REBOUND", "TURNOVER", ...
+
+  @@unique([gameId, eventNum])
+  @@index([gameId, elapsedSec])
+  @@map("play_by_play")
+}
