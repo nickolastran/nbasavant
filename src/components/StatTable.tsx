@@ -30,10 +30,13 @@ type Props<T> = {
   filename?: string;
   pageSize?: number;
   caption?: string;
+  /** Shown instead of rows when there are none. */
+  empty?: string;
 };
 
 export function StatTable<T extends Record<string, any>>({
   rows, cols, initialSort, href, filename = 'nba-savant', pageSize = 50, caption,
+  empty = 'No players match these filters. Try widening the minimum games or clearing the team.',
 }: Props<T>) {
   const [sort, setSort] = useState<string>(initialSort ?? cols[1]?.key ?? cols[0].key);
   const [dir, setDir] = useState<'asc' | 'desc'>('desc');
@@ -147,7 +150,7 @@ export function StatTable<T extends Record<string, any>>({
             {!visible.length && (
               <tr>
                 <td colSpan={cols.length} style={{ textAlign: 'center', color: 'var(--ink-3)', padding: '2rem' }}>
-                  No players match these filters. Try widening the minimum games or clearing the team.
+                  {empty}
                 </td>
               </tr>
             )}

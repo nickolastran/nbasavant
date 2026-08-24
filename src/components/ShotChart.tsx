@@ -29,10 +29,17 @@ function hexBin(x: number, y: number, r: number) {
   return { q: rx, r: rz, cx: r * 1.5 * rx, cy: r * Math.sqrt(3) * (rz + rx / 2) };
 }
 
+/**
+ * Rounded to 1/100 of a court unit — a thousandth of a foot, invisible on
+ * screen. Math.cos/sin are implementation-defined to within an ulp, so Node and
+ * the browser can disagree in the 16th digit; unrounded, that lands verbatim in
+ * the `points` attribute and React rejects the server HTML on hydration.
+ */
 const hexPath = (cx: number, cy: number, r: number) =>
   Array.from({ length: 6 }, (_, i) => {
     const a = (Math.PI / 180) * (60 * i);
-    return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
+    const round = (v: number) => Math.round(v * 100) / 100;
+    return `${round(cx + r * Math.cos(a))},${round(cy + r * Math.sin(a))}`;
   }).join(' ');
 
 /**
