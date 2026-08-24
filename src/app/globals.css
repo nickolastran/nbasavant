@@ -5,7 +5,7 @@
 /*
  * Palette: navy chrome (the scoreboard), paper content, and one diverging
  * cold->hot pair that means the same thing everywhere on the site — blue is
- * below league average, red is above. Validated for CVD in both modes.
+ * below league average, red is above. Validated for CVD.
  */
 :root {
   --surface: #fcfcfb;
@@ -30,40 +30,23 @@
   --shadow: 0 1px 2px rgba(13, 33, 55, 0.08), 0 4px 16px rgba(13, 33, 55, 0.06);
 }
 
-.dark {
-  --surface: #0b1420;
-  --panel: #101c2b;
-  --panel-2: #16263a;
-  --line: #24374d;
-  --ink: #e8eef5;
-  --ink-2: #a3b3c4;
-  --ink-3: #6f8296;
-  --chrome: #081522;
-  --chrome-2: #12283f;
-  --on-chrome: #e8eef5;
-  --accent: #e14a60;
-  --cold: #3f83cc;
-  --hot: #e14a60;
-  --mid: #3a4a5c;
-  --hardwood: #a8763c;
-  --s1: #3f83cc;
-  --s2: #e14a60;
-  --s3: #9b7ad6;
-  --s4: #b3821f;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
 html {
   color-scheme: light;
-}
-html.dark {
-  color-scheme: dark;
 }
 
 body {
   background: var(--surface);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+}
+
+/* The scoreboard strip scrolls by its arrows, not by a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Every number on this site is a stat; keep columns from dancing. */

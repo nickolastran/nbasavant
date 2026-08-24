@@ -8,7 +8,6 @@ import { seasonOptions } from '@/lib/options';
 export const metadata = { title: 'Team Analytics' };
 export const revalidate = 60;
 
-const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
 
 export default async function TeamsPage({
   searchParams,
@@ -40,17 +39,6 @@ export default async function TeamsPage({
     oppEfgPct: t.oppEfgPct, oppTovPct: t.oppTovPct, drebPct: t.drebPct,
     sos: t.sos,
   }));
-
-  // Defense allowed by opposing position — the matchup view.
-  const defRows: Record<string, string | number>[] = teams.map((t) => {
-    const byPos = (t.drtgByPosition ?? {}) as Record<string, number>;
-    return {
-      team: `${t.team.city} ${t.team.name}`,
-      abbr: t.team.abbreviation,
-      drtg: t.drtg,
-      ...Object.fromEntries(POSITIONS.map((p) => [p, byPos[p] ?? 0])),
-    };
-  });
 
   const paceData = [...rows]
     .sort((a, b) => b.pace - a.pace)
@@ -106,29 +94,7 @@ export default async function TeamsPage({
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-lg font-bold tracking-tight">Defense by opposing position</h2>
-          <StatTable
-            rows={defRows}
-            cols={[
-              { key: 'team', label: 'Team' },
-              { key: 'drtg', label: 'DRtg', dp: 1, shade: true, lowerIsBetter: true },
-              ...POSITIONS.map((p) => ({
-                key: p,
-                label: `vs ${p}`,
-                dp: 1,
-                shade: true,
-                lowerIsBetter: true,
-              })),
-            ]}
-            initialSort="drtg"
-            filename={`team-defense-${seasonKey}`}
-            pageSize={30}
-            caption="Points allowed per 100 possessions to each position"
-          />
-        </div>
-
+      <div>
         {/* Pace alone: net rating shares no scale with it, so it gets the table
             rather than a second y-axis. */}
         <TrendChart

@@ -8,7 +8,7 @@ export const metadata = { title: 'Players' };
 export const revalidate = 60;
 
 type Row = {
-  playerId: number; player: string; team: string; pos: string; jersey: string;
+  playerId: number; player: string; team: string; pos: string;
   gp: number; min: number; ppg: number; rpg: number; apg: number;
   fgPct: number; fg3Pct: number; tsPct: number; usgPct: number;
 };
@@ -17,7 +17,6 @@ const COLS: Col<Row>[] = [
   { key: 'player', label: 'Player' },
   { key: 'team', label: 'Team' },
   { key: 'pos', label: 'Pos' },
-  { key: 'jersey', label: '#' },
   { key: 'gp', label: 'GP' },
   { key: 'min', label: 'MPG', dp: 1, shade: true },
   { key: 'ppg', label: 'PPG', dp: 1, shade: true },
@@ -48,7 +47,7 @@ export default async function PlayersPage({
       gp: { gte: Number(sp.minGp) || 1 },
     },
     include: {
-      player: { select: { id: true, fullName: true, position: true, jersey: true, team: { select: { abbreviation: true } } } },
+      player: { select: { id: true, fullName: true, position: true, team: { select: { abbreviation: true } } } },
     },
     orderBy: { ppg: 'desc' },
     take: 600,
@@ -59,7 +58,6 @@ export default async function PlayersPage({
     player: r.player.fullName,
     team: r.player.team?.abbreviation ?? '',
     pos: r.player.position ?? '',
-    jersey: r.player.jersey ?? '',
     gp: r.gp,
     min: r.gp ? r.min / r.gp : 0,
     ppg: r.ppg, rpg: r.rpg, apg: r.apg,

@@ -131,6 +131,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
             {team.city} {team.name} <span className="tnum font-normal">— {score}</span>
           </h2>
           <StatTable
+            empty={"Per-game logs aren't part of the ingest — see the data notes in the README."}
             rows={box(team.id)}
             cols={boxCols as any}
             initialSort="min"

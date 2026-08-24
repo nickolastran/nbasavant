@@ -9,13 +9,13 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "tsx scripts/ingest.ts --from 2026 --to 2026",
     "db:studio": "prisma studio",
     "ingest": "tsx scripts/ingest.ts",
     "test": "tsx src/lib/stats.test.ts"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx scripts/ingest.ts --from 2026 --to 2026"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",

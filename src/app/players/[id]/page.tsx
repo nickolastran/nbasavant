@@ -108,8 +108,13 @@ export default async function PlayerPage({
         <div className="flex flex-wrap items-end justify-between gap-4 p-4">
           <div>
             <div className="eyebrow">
-              {player.team ? `${player.team.city} ${player.team.name}` : 'Free agent'} · #{player.jersey} ·{' '}
-              {player.position}
+              {[
+                player.team ? `${player.team.city} ${player.team.name}` : 'Free agent',
+                player.jersey && `#${player.jersey}`,
+                player.position,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </div>
             <h1 className="text-2xl font-bold tracking-tight">{player.fullName}</h1>
             <div className="mt-1 text-xs" style={{ color: 'var(--ink-2)' }}>
@@ -215,6 +220,7 @@ export default async function PlayerPage({
       <section>
         <h2 className="mb-2 text-lg font-bold tracking-tight">Game log — {seasonKey}</h2>
         <StatTable
+          empty={"Per-game logs aren't part of the ingest — see the data notes in the README."}
           rows={logRows}
           cols={
             [
