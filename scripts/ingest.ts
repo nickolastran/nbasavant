@@ -1,19 +1,29 @@
 /**
- * Pulls real data from stats.nba.com into the same schema the seed writes.
+ * Pulls real NBA data from basketball-reference.com into the schema.
  *
- *   npm run ingest -- --season 2024-25 --shots 60 --pbp 10
+ *   npm run ingest                                   # 2000-01 .. 2025-26, ~25 min
+ *   npm run ingest -- --from 2020 --to 2026          # seasons by end year
+ *   npm run ingest -- --shots 40 --pbp 30            # more derived detail
+ *   npm run ingest -- --keep                         # add to the DB instead of wiping it
+ *   npm run ingest -- --from 2027 --to 2027 --keep   # next season's schedule, once BR posts it
  *
- * stats.nba.com is undocumented and unfriendly: it needs browser-ish headers,
- * rate limits aggressively, and occasionally hangs. Every call goes through
- * `nba()` below, which sets the headers, retries, and paces itself.
+ * Real, straight off the source: players, per-season totals, the published
+ * advanced metrics (PER, TS%, USG%, WS, BPM, VORP, AST%/TRB%/STL%/BLK%/TOV%),
+ * team ratings, and every regular-season game with its final score.
+ *
+ * Derived, because basketball-reference publishes no such data: individual
+ * ORtg/DRtg (stats.ts approximations), shot coordinates, and play-by-play.
+ * Shots are sampled to match each player's *published* FGA share and FG% by
+ * distance band, so the chart totals tie out to the real numbers even though
+ * no individual dot is a real shot.
+ *
+ * basketball-reference throttles above ~20 requests/minute and will ban a
+ * client that keeps going, so every fetch runs through `page()`, which paces
+ * itself, backs off on 429, and retries.
  */
 import { PrismaClient } from '@prisma/client';
 import { TEAMS } from '../prisma/teams';
-import {
-  BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, centerBpm, efgPct,
-  normalizePer, playerDrtg, playerOrtg, rebPct, tovPct, tsPct, uPer, usgPct, vorp,
-  winShares,
-} from '../src/lib/stats';
+import { BoxTotals, TeamTotals, playerDrtg, playerOrtg, LEAGUE_2024_25, shotZone } from '../src/lib/stats';
 
 const prisma = new PrismaClient();
 
@@ -21,390 +31,576 @@ const arg = (name: string, fallback?: string) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > -1 ? process.argv[i + 1] : fallback;
 };
+const flag = (name: string) => process.argv.includes(`--${name}`);
 
-const SEASON = arg('season', process.env.NBA_SEASON ?? '2024-25')!;
-const SHOT_PLAYERS = Number(arg('shots', '60'));
-const PBP_GAMES = Number(arg('pbp', '10'));
-const DELAY = Number(process.env.NBA_STATS_DELAY_MS ?? 800);
-
-const HEADERS = {
-  'User-Agent':
-    process.env.NBA_STATS_USER_AGENT ??
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
-  Referer: 'https://www.nba.com/',
-  Origin: 'https://www.nba.com',
-  Accept: 'application/json, text/plain, */*',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'x-nba-stats-origin': 'stats',
-  'x-nba-stats-token': 'true',
-  Connection: 'keep-alive',
-};
+const FROM = Number(arg('from', '2001'));           // season end year: 2001 = 2000-01
+const TO = Number(arg('to', '2026'));
+const SHOT_PLAYERS = Number(arg('shots', '20'));    // per season, by attempts
+const PBP_GAMES = Number(arg('pbp', '20'));         // most recent games overall
+const DELAY = Number(process.env.BREF_DELAY_MS ?? 3500);
+const UA =
+  process.env.BREF_USER_AGENT ??
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type ResultSet = { name: string; headers: string[]; rowSet: (string | number | null)[][] };
+// --- deterministic RNG, so a re-run produces the same derived shots ---------
+let state = 20260101;
+const rnd = () => {
+  state = (state + 0x6d2b79f5) | 0;
+  let t = Math.imul(state ^ (state >>> 15), 1 | state);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const range = (lo: number, hi: number) => lo + rnd() * (hi - lo);
+const int = (lo: number, hi: number) => Math.floor(range(lo, hi + 1));
+const pick = <T>(a: readonly T[]) => a[Math.floor(rnd() * a.length)];
+const shuffle = <T>(a: T[]) => {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
 
-/** One stats.nba.com call, returned as objects keyed by the header row. */
-async function nba(endpoint: string, params: Record<string, string | number>, tries = 3) {
-  const url = `https://stats.nba.com/stats/${endpoint}?${new URLSearchParams(
-    Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
-  )}`;
+// --- fetching --------------------------------------------------------------
 
+/** One basketball-reference page, comment markers stripped. Empty string on 404. */
+async function page(path: string, tries = 3): Promise<string> {
   for (let attempt = 1; attempt <= tries; attempt++) {
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 30_000);
-      const res = await fetch(url, { headers: HEADERS, signal: ctrl.signal });
-      clearTimeout(timer);
+      const res = await fetch(`https://www.basketball-reference.com${path}`, {
+        headers: { 'User-Agent': UA, Accept: 'text/html,*/*', 'Accept-Language': 'en-US,en;q=0.9' },
+        signal: AbortSignal.timeout(45_000),
+      });
+      if (res.status === 404) return '';
+      if (res.status === 429) {
+        console.warn('  rate limited; sleeping 90s');
+        await sleep(90_000);
+        throw new Error('429');
+      }
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const body = (await res.json()) as { resultSets: ResultSet[] };
+      const html = await res.text();
       await sleep(DELAY);
-      return body.resultSets.map((rs) => ({
-        name: rs.name,
-        rows: rs.rowSet.map((row) =>
-          Object.fromEntries(rs.headers.map((h, i) => [h, row[i]])) as Record<string, any>,
-        ),
-      }));
+      // Half of BR's tables ship inside HTML comments; unwrap them all.
+      return html.replaceAll('<!--', '').replaceAll('-->', '');
     } catch (err) {
-      if (attempt === tries) throw new Error(`${endpoint} failed after ${tries} tries: ${err}`);
-      console.warn(`  ${endpoint} attempt ${attempt} failed (${err}); backing off`);
+      if (attempt === tries) throw new Error(`${path} failed after ${tries} tries: ${err}`);
+      console.warn(`  ${path} attempt ${attempt} failed (${err}); backing off`);
       await sleep(DELAY * attempt * 3);
     }
   }
   throw new Error('unreachable');
 }
 
-const emptyBox = (): BoxTotals => ({
-  min: 0, pts: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, tov: 0,
-  pf: 0, fgm: 0, fga: 0, fg3m: 0, fg3a: 0, ftm: 0, fta: 0,
-});
-const r1 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 10) / 10;
-const r2 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
-const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0);
+type Row = Record<string, string>;
+
+const strip = (s: string) =>
+  s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim();
+
+/**
+ * Every data row of one BR table, keyed by its `data-stat` names.
+ * `_id` is the player slug; `_team` / `<stat>_abbr` are team abbreviations
+ * lifted out of the cell links, which is the only place BR puts them.
+ */
+function table(html: string, id: string): Row[] {
+  const start = html.indexOf(`id="${id}"`);
+  if (start < 0) return [];
+  const stop = html.indexOf('</table>', start);
+  const body = html.slice(start, stop < 0 ? undefined : stop);
+  return body
+    .split('<tr')
+    .slice(1)
+    .map((tr) => {
+      const row: Row = {};
+      for (const m of tr.matchAll(/data-stat="([a-z0-9_]+)"([^>]*)>([\s\S]*?)<\/(?:td|th)>/g)) {
+        row[m[1]] = strip(m[3]);
+        const csk = /csk="([^"]+)"/.exec(m[2]);
+        if (csk) row[`${m[1]}_csk`] = csk[1];
+        const team = /\/teams\/([A-Z]{3})\//.exec(m[3]);
+        if (team) row[`${m[1]}_abbr`] = team[1];
+      }
+      const slug = /data-append-csv="([^"]+)"/.exec(tr);
+      if (slug) row._id = slug[1];
+      const team = /\/teams\/([A-Z]{3})\//.exec(tr);
+      if (team) row._team = team[1];
+      return row;
+    })
+    .filter((r) => Object.keys(r).length > 3);
+}
+
+const n = (v: string | undefined) => {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
+};
+const pctOf = (v: string | undefined) => n(v) * 100; // BR writes ".402"
+const r1 = (x: number) => Math.round((Number.isFinite(x) ? x : 0) * 10) / 10;
+const r2 = (x: number) => Math.round((Number.isFinite(x) ? x : 0) * 100) / 100;
 
 const chunked = async <T>(rows: T[], size: number, fn: (c: T[]) => Promise<unknown>) => {
   for (let i = 0; i < rows.length; i += size) await fn(rows.slice(i, i + size));
 };
 
+// --- teams -----------------------------------------------------------------
+
+/**
+ * BR abbreviation -> Team.id. Charlotte and New Orleans map onto the franchises
+ * that own that history today (CHH/CHA/CHO are all one franchise; NOH/NOK are
+ * the Pelicans). Relocations that changed city get their own row.
+ */
+const BREF_TEAM: Record<string, number> = {
+  ATL: 1610612737, BOS: 1610612738, BRK: 1610612751, CHA: 1610612766, CHH: 1610612766,
+  CHI: 1610612741, CHO: 1610612766, CLE: 1610612739, DAL: 1610612742, DEN: 1610612743,
+  DET: 1610612765, GSW: 1610612744, HOU: 1610612745, IND: 1610612754, LAC: 1610612746,
+  LAL: 1610612747, MEM: 1610612763, MIA: 1610612748, MIL: 1610612749, MIN: 1610612750,
+  NJN: 1610612769, NOH: 1610612740, NOK: 1610612740, NOP: 1610612740, NYK: 1610612752,
+  OKC: 1610612760, ORL: 1610612753, PHI: 1610612755, PHO: 1610612756, POR: 1610612757,
+  SAC: 1610612758, SAS: 1610612759, SEA: 1610612767, TOR: 1610612761, UTA: 1610612762,
+  VAN: 1610612768, WAS: 1610612764,
+};
+/** Rows BR uses for a player's combined line when he changed teams mid-season. */
+const isCombined = (abbr: string) => abbr === 'TOT' || /^\dTM$/.test(abbr);
+
+// --- players ---------------------------------------------------------------
+
+/**
+ * BR identifies players by slug ("jamesle01"); the schema wants an Int id.
+ * FNV-1a keeps it stable across runs so a partial re-ingest lands on the same
+ * rows; the while-loop settles the rare collision.
+ */
+const idBySlug = new Map<string, number>();
+const slugById = new Map<number, string>();
+function playerId(slug: string): number {
+  const cached = idBySlug.get(slug);
+  if (cached) return cached;
+  let h = 0x811c9dc5;
+  for (const ch of slug) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
+  let id = (h >>> 1) || 1;
+  while (slugById.has(id) && slugById.get(id) !== slug) id++;
+  idBySlug.set(slug, id);
+  slugById.set(id, slug);
+  return id;
+}
+
+const emptyBox = (): BoxTotals => ({
+  min: 0, pts: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, tov: 0,
+  pf: 0, fgm: 0, fga: 0, fg3m: 0, fg3a: 0, ftm: 0, fta: 0,
+});
+const toBox = (r: Row): BoxTotals => ({
+  min: n(r.mp), pts: n(r.pts), reb: n(r.trb), oreb: n(r.orb), dreb: n(r.drb),
+  ast: n(r.ast), stl: n(r.stl), blk: n(r.blk), tov: n(r.tov), pf: n(r.pf),
+  fgm: n(r.fg), fga: n(r.fga), fg3m: n(r.fg3), fg3a: n(r.fg3a),
+  ftm: n(r.ft), fta: n(r.fta),
+});
+
+// --- derived shots ---------------------------------------------------------
+
+/** BR's distance buckets, as radii in tenths of a foot. */
+const BANDS = [
+  { att: 'pct_fga_00_03', fg: 'fg_pct_00_03', lo: 0, hi: 30 },
+  { att: 'pct_fga_03_10', fg: 'fg_pct_03_10', lo: 30, hi: 100 },
+  { att: 'pct_fga_10_16', fg: 'fg_pct_10_16', lo: 100, hi: 160 },
+  { att: 'pct_fga_16_xx', fg: 'fg_pct_16_xx', lo: 160, hi: 235 },
+];
+const ACTIONS: Record<string, string[]> = {
+  'Restricted Area': ['Driving Layup', 'Cutting Dunk', 'Alley Oop Dunk', 'Layup', 'Putback Layup'],
+  'In The Paint (Non-RA)': ['Floating Jump Shot', 'Hook Shot', 'Turnaround Fadeaway'],
+  'Mid-Range': ['Pullup Jump Shot', 'Jump Shot', 'Step Back Jump Shot'],
+  'Long Mid-Range': ['Pullup Jump Shot', 'Jump Shot', 'Fadeaway Jump Shot'],
+  'Left Corner 3': ['Jump Shot', 'Catch and Shoot 3PT'],
+  'Right Corner 3': ['Jump Shot', 'Catch and Shoot 3PT'],
+  'Above the Break 3': ['Pullup Jump Shot', 'Jump Shot', 'Step Back Jump Shot', 'Catch and Shoot 3PT'],
+};
+
+/** A point on the floor inside an annulus, in NBA tracking coordinates. */
+function spot(lo: number, hi: number) {
+  const d = range(lo, hi);
+  const t = range(0.12, Math.PI - 0.12);
+  const x = Math.round(Math.cos(t) * d);
+  let y = Math.round(Math.sin(t) * d);
+  // shotZone() calls anything past |x|=220 near the baseline a corner three,
+  // so push deep two-pointers off the sideline rather than mislabel them.
+  if (hi < 237 && Math.abs(x) >= 219 && y <= 95) y = int(96, 150);
+  return { x, y };
+}
+
 async function main() {
-  const startYear = Number(SEASON.slice(0, 4));
-  console.log(`Ingesting ${SEASON} from stats.nba.com`);
+  const years: number[] = [];
+  for (let y = TO; y >= FROM; y--) years.push(y); // newest first: Player.teamId ends up current
+  const label = (y: number) => `${y - 1}-${String(y % 100).padStart(2, '0')}`;
+  console.log(`Ingesting ${years.length} season(s), ${label(FROM)} .. ${label(TO)}, from basketball-reference`);
 
-  await prisma.team.createMany({ data: TEAMS, skipDuplicates: true });
-  const season = await prisma.season.upsert({
-    where: { key: SEASON },
-    create: { key: SEASON, startYear, endYear: startYear + 1, active: true },
-    update: {},
-  });
-
-  // --- players ------------------------------------------------------------
-  const [players] = await nba('commonallplayers', {
-    LeagueID: '00', Season: SEASON, IsOnlyCurrentSeason: 1,
-  });
-  const teamIds = new Set(TEAMS.map((t) => t.id));
-  const roster = players.rows.filter((p) => teamIds.has(num(p.TEAM_ID)));
-
-  await chunked(roster, 200, (c) =>
-    prisma.player.createMany({
-      data: c.map((p) => {
-        const [last, first] = String(p.DISPLAY_LAST_COMMA_FIRST).split(', ');
-        return {
-          id: num(p.PERSON_ID),
-          firstName: first ?? '',
-          lastName: last ?? '',
-          fullName: String(p.DISPLAY_FIRST_LAST),
-          active: true,
-          teamId: num(p.TEAM_ID) || null,
-          draftYear: num(p.FROM_YEAR) || null,
-        };
-      }),
-      skipDuplicates: true,
-    }),
-  );
-  console.log(`Players: ${roster.length}`);
-
-  // --- season totals ------------------------------------------------------
-  const [playerTotals] = await nba('leaguedashplayerstats', {
-    LeagueID: '00', Season: SEASON, SeasonType: 'Regular Season', MeasureType: 'Base',
-    PerMode: 'Totals', PaceAdjust: 'N', PlusMinus: 'N', Rank: 'N', Outcome: '',
-    Location: '', Month: 0, SeasonSegment: '', DateFrom: '', DateTo: '', OpponentTeamID: 0,
-    VsConference: '', VsDivision: '', GameSegment: '', Period: 0, LastNGames: 0,
-    TeamID: 0, GameScope: '', PlayerExperience: '', PlayerPosition: '', StarterBench: '',
-    DraftYear: '', DraftPick: '', College: '', Country: '', Height: '', Weight: '',
-    TwoWay: 0, ISTRound: '', ShotClockRange: '', Conference: '', Division: '',
-  });
-
-  const [teamTotals] = await nba('leaguedashteamstats', {
-    LeagueID: '00', Season: SEASON, SeasonType: 'Regular Season', MeasureType: 'Base',
-    PerMode: 'Totals', PaceAdjust: 'N', PlusMinus: 'N', Rank: 'N', Outcome: '',
-    Location: '', Month: 0, SeasonSegment: '', DateFrom: '', DateTo: '', OpponentTeamID: 0,
-    VsConference: '', VsDivision: '', GameSegment: '', Period: 0, LastNGames: 0,
-    TeamID: 0, GameScope: '', PlayerExperience: '', PlayerPosition: '', StarterBench: '',
-    Conference: '', Division: '', ShotClockRange: '',
-  });
-
-  const toBox = (r: Record<string, any>): BoxTotals => ({
-    min: num(r.MIN), pts: num(r.PTS), reb: num(r.REB), oreb: num(r.OREB), dreb: num(r.DREB),
-    ast: num(r.AST), stl: num(r.STL), blk: num(r.BLK), tov: num(r.TOV), pf: num(r.PF),
-    fgm: num(r.FGM), fga: num(r.FGA), fg3m: num(r.FG3M), fg3a: num(r.FG3A),
-    ftm: num(r.FTM), fta: num(r.FTA),
-  });
-
-  const teamBox = new Map<number, TeamTotals>();
-  for (const t of teamTotals.rows) {
-    const b = toBox(t) as TeamTotals;
-    b.gp = num(t.GP);
-    b.oppPts = 0; // filled from the advanced pull below
-    teamBox.set(num(t.TEAM_ID), b);
+  if (!flag('keep')) {
+    console.log('Clearing existing data…');
+    await prisma.$transaction([
+      prisma.playByPlay.deleteMany(), prisma.shotData.deleteMany(),
+      prisma.playerGameLog.deleteMany(), prisma.advancedStats.deleteMany(),
+      prisma.playerStats.deleteMany(), prisma.teamStats.deleteMany(),
+      prisma.game.deleteMany(), prisma.player.deleteMany(),
+      prisma.team.deleteMany(), prisma.season.deleteMany(),
+    ]);
   }
+  await prisma.team.createMany({ data: TEAMS, skipDuplicates: true });
 
-  const [teamAdvanced] = await nba('leaguedashteamstats', {
-    LeagueID: '00', Season: SEASON, SeasonType: 'Regular Season', MeasureType: 'Advanced',
-    PerMode: 'PerGame', PaceAdjust: 'N', PlusMinus: 'N', Rank: 'N', Outcome: '',
-    Location: '', Month: 0, SeasonSegment: '', DateFrom: '', DateTo: '', OpponentTeamID: 0,
-    VsConference: '', VsDivision: '', GameSegment: '', Period: 0, LastNGames: 0,
-    TeamID: 0, GameScope: '', Conference: '', Division: '', ShotClockRange: '',
-  });
+  for (const year of years) {
+    const key = label(year);
+    console.log(`\n=== ${key} ===`);
+    const season = await prisma.season.upsert({
+      where: { key },
+      create: { key, startYear: year - 1, endYear: year, active: year === TO },
+      update: { active: year === TO },
+    });
 
-  await Promise.all(
-    teamAdvanced.rows.map((t) => {
-      const id = num(t.TEAM_ID);
-      const b = teamBox.get(id);
-      if (b) b.oppPts = num(t.DEF_RATING) * ((num(t.PACE) * b.gp) / 100);
-      return prisma.teamStats.upsert({
-        where: { teamId_seasonId: { teamId: id, seasonId: season.id } },
-        create: {
-          teamId: id, seasonId: season.id, gp: num(t.GP), wins: num(t.W), losses: num(t.L),
-          pace: r1(num(t.PACE)), ortg: r1(num(t.OFF_RATING)), drtg: r1(num(t.DEF_RATING)),
-          netRtg: r1(num(t.NET_RATING)), efgPct: r1(num(t.EFG_PCT) * 100),
-          tsPct: r1(num(t.TS_PCT) * 100), tovPct: r1(num(t.TM_TOV_PCT) * 100),
-          orebPct: r1(num(t.OREB_PCT) * 100), drebPct: r1(num(t.DREB_PCT) * 100),
-          ftRate: 0, oppEfgPct: 0, oppTovPct: 0, sos: 0,
-        },
-        update: {
-          gp: num(t.GP), wins: num(t.W), losses: num(t.L),
-          pace: r1(num(t.PACE)), ortg: r1(num(t.OFF_RATING)), drtg: r1(num(t.DEF_RATING)),
-          netRtg: r1(num(t.NET_RATING)), efgPct: r1(num(t.EFG_PCT) * 100),
-          tsPct: r1(num(t.TS_PCT) * 100), tovPct: r1(num(t.TM_TOV_PCT) * 100),
-          orebPct: r1(num(t.OREB_PCT) * 100), drebPct: r1(num(t.DREB_PCT) * 100),
-        },
+    // --- teams ------------------------------------------------------------
+    const leaguePage = await page(`/leagues/NBA_${year}.html`);
+    const teamBox = new Map<number, TeamTotals>();
+    for (const r of table(leaguePage, 'totals-team')) {
+      if (!r._team) continue;
+      const box = toBox(r) as TeamTotals;
+      box.gp = n(r.g);
+      box.min = n(r.mp) || box.gp * 240;
+      box.oppPts = 0;
+      teamBox.set(BREF_TEAM[r._team], box);
+    }
+    for (const r of table(leaguePage, 'totals-opponent')) {
+      // This table prefixes its columns, so points allowed are `opp_pts`.
+      const box = r._team && teamBox.get(BREF_TEAM[r._team]);
+      if (box) box.oppPts = n(r.opp_pts) || n(r.pts);
+    }
+
+    // BR posts a season's schedule months before it is played, with the stat
+    // tables present but empty (every team at g=0). Take the schedule and
+    // nothing else, and leave the season out of `active` so the stat pages keep
+    // defaulting to one that has numbers in it.
+    const scheduleOnly = [...teamBox.values()].every((b) => b.gp === 0);
+    if (scheduleOnly) {
+      await prisma.season.update({ where: { id: season.id }, data: { active: false } });
+    }
+
+    const teamRows = scheduleOnly
+      ? []
+      : table(leaguePage, 'advanced-team').filter((r) => r._team && BREF_TEAM[r._team]);
+    for (const r of teamRows) {
+      const teamId = BREF_TEAM[r._team];
+      const stats = {
+        gp: n(r.wins) + n(r.losses), wins: n(r.wins), losses: n(r.losses),
+        pace: r1(n(r.pace)), ortg: r1(n(r.off_rtg)), drtg: r1(n(r.def_rtg)),
+        netRtg: r1(n(r.net_rtg)), efgPct: r1(pctOf(r.efg_pct)), tsPct: r1(pctOf(r.ts_pct)),
+        tovPct: r1(n(r.tov_pct)), orebPct: r1(n(r.orb_pct)), drebPct: r1(n(r.drb_pct)),
+        ftRate: r2(n(r.ft_rate)), oppEfgPct: r1(pctOf(r.opp_efg_pct)),
+        oppTovPct: r1(n(r.opp_tov_pct)), sos: r2(n(r.sos)),
+      };
+      await prisma.teamStats.upsert({
+        where: { teamId_seasonId: { teamId, seasonId: season.id } },
+        create: { teamId, seasonId: season.id, ...stats },
+        update: stats,
       });
-    }),
-  );
-  console.log(`Team stats: ${teamAdvanced.rows.length}`);
+    }
+    console.log(scheduleOnly ? 'schedule only — no results published yet' : `teams: ${teamRows.length}`);
 
-  // --- player season + advanced stats -------------------------------------
-  const rows = playerTotals.rows
-    .map((r) => {
-      const b = toBox(r);
-      const tm = teamBox.get(num(r.TEAM_ID));
-      return tm ? { r, b, tm, playerId: num(r.PLAYER_ID) } : null;
-    })
-    .filter((x): x is NonNullable<typeof x> => !!x && x.b.min > 0);
+    // --- players and season totals ----------------------------------------
+    const totals = scheduleOnly
+      ? []
+      : table(await page(`/leagues/NBA_${year}_totals.html`), 'totals_stats').filter((r) => r._id);
 
-  const pers = normalizePer(rows.map((x) => ({ uPer: uPer(x.b, x.tm, LEAGUE_2024_25), min: x.b.min })));
-  const bpms = centerBpm(
-    rows.map((x) => ({ ...boxPlusMinus(x.b, x.tm, LEAGUE_2024_25), min: x.b.min })),
-  );
+    // BR lists a combined row plus one row per stint for traded players.
+    // ponytail: we keep the combined line and file it under the last team they
+    // played for, the way nba.com does. Per-stint splits are dropped; add them
+    // back as extra PlayerStats rows if anyone wants the trade-deadline view.
+    type Stint = { slug: string; row: Row; teamId: number };
+    const byPlayer = new Map<string, Stint>();
+    for (const r of totals) {
+      const abbr = r.team_name_abbr || r._team || '';
+      const prev = byPlayer.get(r._id);
+      if (isCombined(abbr)) {
+        byPlayer.set(r._id, { slug: r._id, row: r, teamId: prev?.teamId ?? 0 });
+      } else if (!prev) {
+        byPlayer.set(r._id, { slug: r._id, row: r, teamId: BREF_TEAM[abbr] ?? 0 });
+      } else {
+        prev.teamId = BREF_TEAM[abbr] ?? prev.teamId; // last stint wins
+      }
+    }
+    const players = [...byPlayer.values()].filter((p) => p.teamId);
 
-  await chunked(rows, 200, (c) =>
-    prisma.playerStats.createMany({
-      data: c.map(({ r, b, tm, playerId }) => ({
-        playerId, seasonId: season.id, teamId: num(r.TEAM_ID),
-        gp: num(r.GP), gs: num(r.GS), min: b.min,
-        pts: b.pts, reb: b.reb, oreb: b.oreb, dreb: b.dreb, ast: b.ast, stl: b.stl,
-        blk: b.blk, tov: b.tov, pf: b.pf, fgm: b.fgm, fga: b.fga, fg3m: b.fg3m,
-        fg3a: b.fg3a, ftm: b.ftm, fta: b.fta,
-        ppg: r1(b.pts / Math.max(1, num(r.GP))),
-        rpg: r1(b.reb / Math.max(1, num(r.GP))),
-        apg: r1(b.ast / Math.max(1, num(r.GP))),
-        fgPct: r1(num(r.FG_PCT) * 100), fg3Pct: r1(num(r.FG3_PCT) * 100),
-        ftPct: r1(num(r.FT_PCT) * 100),
-        tsPct: r1(tsPct(b)), efgPct: r1(efgPct(b)), usgPct: r1(usgPct(b, tm)),
-      })),
-      skipDuplicates: true,
-    }),
-  );
-
-  await chunked(
-    rows.map((x, i) => ({ ...x, per: pers[i], bpm: bpms[i] })),
-    200,
-    (c) =>
-      prisma.advancedStats.createMany({
-        data: c.map(({ b, tm, playerId, per, bpm }) => {
-          const ws = winShares(b, tm, LEAGUE_2024_25);
-          const ortg = playerOrtg(b, tm, LEAGUE_2024_25);
-          const drtg = playerDrtg(b, tm);
+    await chunked(players, 500, (c) =>
+      prisma.player.createMany({
+        data: c.map(({ slug, row, teamId }) => {
+          const full = row.name_display || row.player || '';
+          const sp = full.indexOf(' ');
           return {
-            playerId, seasonId: season.id,
-            per: r2(per), ortg: r1(ortg), drtg: r1(drtg), netRtg: r1(ortg - drtg),
-            ows: r2(ws.ows), dws: r2(ws.dws), ws: r2(ws.ws), ws48: r2(ws.ws48),
-            obpm: r2(bpm.obpm), dbpm: r2(bpm.dbpm), bpm: r2(bpm.bpm),
-            vorp: r2(vorp(bpm.bpm, b.min, tm.min, tm.gp)),
-            astPct: r1(astPct(b, tm)), rebPct: r1(rebPct(b, tm, tm.reb)),
-            stlPct: 0, blkPct: 0, tovPct: r1(tovPct(b)),
+            id: playerId(slug),
+            firstName: sp < 0 ? full : full.slice(0, sp),
+            lastName: sp < 0 ? '' : full.slice(sp + 1),
+            fullName: full,
+            position: (row.pos || '').split('-')[0] || null,
+            active: year === TO,
+            teamId,
           };
         }),
-        skipDuplicates: true,
+        skipDuplicates: true, // newest season is ingested first, so it wins
       }),
-  );
-  console.log(`Player stats: ${rows.length}`);
+    );
 
-  // --- games and game logs ------------------------------------------------
-  const [gameLog] = await nba('leaguegamelog', {
-    LeagueID: '00', Season: SEASON, SeasonType: 'Regular Season', PlayerOrTeam: 'T',
-    Counter: 1000, Sorter: 'DATE', Direction: 'ASC', DateFrom: '', DateTo: '',
-  });
-
-  // Two rows per game (one per team); pair them by GAME_ID.
-  const pairs = new Map<string, Record<string, any>[]>();
-  for (const g of gameLog.rows) {
-    pairs.set(String(g.GAME_ID), [...(pairs.get(String(g.GAME_ID)) ?? []), g]);
-  }
-
-  const games = [...pairs.entries()]
-    .filter(([, sides]) => sides.length === 2)
-    .map(([gameId, sides]) => {
-      const home = sides.find((s) => !String(s.MATCHUP).includes('@'))!;
-      const away = sides.find((s) => String(s.MATCHUP).includes('@'))!;
+    const statRows = players.map((p) => {
+      const box = toBox(p.row);
+      const gp = Math.max(1, n(p.row.games));
       return {
-        gameCode: gameId,
-        seasonId: season.id,
-        date: new Date(String(home.GAME_DATE)),
-        homeTeamId: num(home.TEAM_ID),
-        awayTeamId: num(away.TEAM_ID),
-        homeScore: num(home.PTS),
-        awayScore: num(away.PTS),
-        status: 'Final',
+        ...p,
+        box,
+        data: {
+          playerId: playerId(p.slug), seasonId: season.id, teamId: p.teamId,
+          gp: n(p.row.games), gs: n(p.row.games_started), min: box.min,
+          pts: box.pts, reb: box.reb, oreb: box.oreb, dreb: box.dreb, ast: box.ast,
+          stl: box.stl, blk: box.blk, tov: box.tov, pf: box.pf, fgm: box.fgm,
+          fga: box.fga, fg3m: box.fg3m, fg3a: box.fg3a, ftm: box.ftm, fta: box.fta,
+          ppg: r1(box.pts / gp), rpg: r1(box.reb / gp), apg: r1(box.ast / gp),
+          fgPct: r1(pctOf(p.row.fg_pct)), fg3Pct: r1(pctOf(p.row.fg3_pct)),
+          ftPct: r1(pctOf(p.row.ft_pct)), efgPct: r1(pctOf(p.row.efg_pct)),
+          tsPct: 0, usgPct: 0, // filled from the advanced page below
+        },
       };
     });
 
-  await chunked(games, 500, (c) => prisma.game.createMany({ data: c, skipDuplicates: true }));
-  console.log(`Games: ${games.length}`);
+    // --- published advanced metrics ---------------------------------------
+    const advanced = new Map<string, Row>();
+    for (const r of scheduleOnly ? [] : table(await page(`/leagues/NBA_${year}_advanced.html`), 'advanced')) {
+      if (!r._id) continue;
+      const abbr = r.team_name_abbr || r._team || '';
+      if (isCombined(abbr) || !advanced.has(r._id)) advanced.set(r._id, r);
+    }
+    for (const s of statRows) {
+      const a = advanced.get(s.slug);
+      if (a) {
+        s.data.tsPct = r1(pctOf(a.ts_pct));
+        s.data.usgPct = r1(n(a.usg_pct));
+      }
+    }
 
-  const gameIdByCode = new Map(
-    (await prisma.game.findMany({ where: { seasonId: season.id }, select: { id: true, gameCode: true } }))
-      .map((g) => [g.gameCode, g.id]),
-  );
+    await chunked(statRows, 500, (c) =>
+      prisma.playerStats.createMany({ data: c.map((s) => s.data), skipDuplicates: true }),
+    );
 
-  const [playerLog] = await nba('leaguegamelog', {
-    LeagueID: '00', Season: SEASON, SeasonType: 'Regular Season', PlayerOrTeam: 'P',
-    Counter: 1000, Sorter: 'DATE', Direction: 'ASC', DateFrom: '', DateTo: '',
+    const advData = statRows.flatMap((s) => {
+      const a = advanced.get(s.slug);
+      if (!a) return [];
+      const tm = teamBox.get(s.teamId) ?? ({ ...emptyBox(), gp: 82 } as TeamTotals);
+      // The only two numbers BR doesn't publish per player.
+      const ortg = playerOrtg(s.box, tm, LEAGUE_2024_25);
+      const drtg = playerDrtg(s.box, tm);
+      return [{
+        playerId: playerId(s.slug), seasonId: season.id,
+        per: r2(n(a.per)), ortg: r1(ortg), drtg: r1(drtg), netRtg: r1(ortg - drtg),
+        ows: r2(n(a.ows)), dws: r2(n(a.dws)), ws: r2(n(a.ws)), ws48: r2(n(a.ws_per_48)),
+        obpm: r2(n(a.obpm)), dbpm: r2(n(a.dbpm)), bpm: r2(n(a.bpm)), vorp: r2(n(a.vorp)),
+        astPct: r1(n(a.ast_pct)), rebPct: r1(n(a.trb_pct)), stlPct: r1(n(a.stl_pct)),
+        blkPct: r1(n(a.blk_pct)), tovPct: r1(n(a.tov_pct)),
+      }];
+    });
+    await chunked(advData, 500, (c) =>
+      prisma.advancedStats.createMany({ data: c, skipDuplicates: true }),
+    );
+    console.log(`players: ${players.length}, advanced: ${advData.length}`);
+
+    // --- games ------------------------------------------------------------
+    const index = await page(`/leagues/NBA_${year}_games.html`);
+    // Chronological, as BR lists them. Split seasons name the month pages
+    // "october-2019"/"october-2020", so the segment isn't always just letters.
+    const months = [
+      ...new Set(
+        [...index.matchAll(new RegExp(`/leagues/NBA_${year}_games-([a-z0-9-]+)\\.html`, 'g'))]
+          .map((m) => m[1]),
+      ),
+    ];
+    const games: {
+      gameCode: string; seasonId: number; date: Date; homeTeamId: number; awayTeamId: number;
+      homeScore: number; awayScore: number; status: string; period: number;
+    }[] = [];
+
+    // BR runs the postseason into the same month pages as the regular season.
+    // A team's regular season is exactly the game count BR reports for it, so
+    // take games in date order until every team is full, then stop reading.
+    // ponytail: the NBA Cup final doesn't count toward the 82 but sits in the
+    // schedule, so the two finalists lose their last regular-season game to it
+    // (1 game per season since 2023-24). Filter on game_remarks if that matters.
+    const played = new Map<number, number>();
+    const cap = (id: number) => teamBox.get(id)?.gp ?? 82;
+    const seasonOver = () => [...teamBox].every(([id, b]) => (played.get(id) ?? 0) >= b.gp);
+
+    for (const month of months.length ? months : ['']) {
+      const html = month ? await page(`/leagues/NBA_${year}_games-${month}.html`) : index;
+      for (const r of table(html, 'schedule')) {
+        const code = /^(\d{8})\d?([A-Z]{3})/.exec(r.date_game_csk ?? '');
+        const home = BREF_TEAM[r.home_team_name_abbr];
+        const away = BREF_TEAM[r.visitor_team_name_abbr];
+        if (!home || !away) continue;
+        const ot = r.overtimes ?? '';
+        if (!scheduleOnly) {
+          if (n(r.home_pts) <= 0) continue;
+          if ((played.get(home) ?? 0) >= cap(home) || (played.get(away) ?? 0) >= cap(away)) continue;
+          played.set(home, (played.get(home) ?? 0) + 1);
+          played.set(away, (played.get(away) ?? 0) + 1);
+        }
+        games.push({
+          gameCode: code ? r.date_game_csk : `${r.date_game}|${r.home_team_name_abbr}`,
+          seasonId: season.id,
+          date: code
+            ? new Date(`${code[1].slice(0, 4)}-${code[1].slice(4, 6)}-${code[1].slice(6, 8)}T12:00:00Z`)
+            : new Date(r.date_game),
+          homeTeamId: home, awayTeamId: away,
+          homeScore: n(r.home_pts), awayScore: n(r.visitor_pts),
+          // BR's overtime column is '', 'OT', '2OT', ...; a played game reads
+          // "Final" or "Final/2OT", an unplayed one carries its tip-off time.
+          status: n(r.home_pts) > 0 ? `Final${ot ? `/${ot}` : ''}` : r.game_start_time || 'Scheduled',
+          period: 4 + (ot ? Number(ot.replace('OT', '')) || 1 : 0),
+        });
+      }
+      if (!scheduleOnly && seasonOver()) break;
+    }
+    await chunked(games, 1000, (c) => prisma.game.createMany({ data: c, skipDuplicates: true }));
+    console.log(`games: ${games.length}`);
+
+    // --- derived shot charts ----------------------------------------------
+    if (SHOT_PLAYERS > 0 && games.length) {
+      const shooting = new Map<string, Row>();
+      for (const r of table(await page(`/leagues/NBA_${year}_shooting.html`), 'shooting')) {
+        const abbr = r.team_name_abbr || r._team || '';
+        if (r._id && (isCombined(abbr) || !shooting.has(r._id))) shooting.set(r._id, r);
+      }
+
+      const dbGames = await prisma.game.findMany({
+        where: { seasonId: season.id },
+        select: { id: true, date: true, homeTeamId: true, awayTeamId: true },
+      });
+      const gamesByTeam = new Map<number, typeof dbGames>();
+      for (const g of dbGames) {
+        for (const t of [g.homeTeamId, g.awayTeamId]) {
+          gamesByTeam.set(t, [...(gamesByTeam.get(t) ?? []), g]);
+        }
+      }
+
+      const targets = [...statRows].sort((a, b) => b.box.fga - a.box.fga).slice(0, SHOT_PLAYERS);
+      const shots: any[] = [];
+      for (const t of targets) {
+        const sh = shooting.get(t.slug);
+        const teamGames = gamesByTeam.get(t.teamId);
+        if (!sh || !teamGames?.length || t.box.fga < 1) continue;
+
+        const corner = n(sh.pct_fg3a_corner3);
+        const bands = [
+          ...BANDS.map((b) => ({ ...b, share: n(sh[b.att]), fgPct: n(sh[b.fg]), corner: 0 })),
+          {
+            att: '', fg: '', lo: 237, hi: 285, corner,
+            share: n(sh.pct_fga_fg3a), fgPct: n(t.row.fg3_pct),
+          },
+        ];
+        const totalShare = bands.reduce((s, b) => s + b.share, 0) || 1;
+
+        const drawn: { x: number; y: number; made: boolean }[] = [];
+        for (const b of bands) {
+          const att = Math.round(t.box.fga * (b.share / totalShare));
+          const made = Math.round(att * b.fgPct);
+          for (let i = 0; i < att; i++) {
+            const p =
+              b.corner && rnd() < b.corner
+                ? { x: (rnd() < 0.5 ? -1 : 1) * int(222, 245), y: int(-8, 88) }
+                : spot(b.lo, b.hi);
+            drawn.push({ ...p, made: i < made });
+          }
+        }
+        shuffle(drawn);
+
+        // Spread the season's attempts over the games he could have played in.
+        const played = shuffle([...teamGames]).slice(0, Math.max(1, n(t.row.games)));
+        drawn.forEach((s, i) => {
+          const game = played[i % played.length];
+          const z = shotZone(s.x, s.y);
+          shots.push({
+            playerId: playerId(t.slug), gameId: game.id, seasonId: season.id,
+            teamId: t.teamId, x: s.x, y: s.y,
+            distanceFt: Math.round(Math.hypot(s.x, s.y) / 10),
+            made: s.made, value: z.value, zone: z.zone, zoneArea: z.area,
+            actionType: pick(ACTIONS[z.zone]), period: int(1, 4),
+            minsLeft: int(0, 11), secsLeft: int(0, 59), date: game.date,
+          });
+        });
+      }
+      await chunked(shots, 5000, (c) => prisma.shotData.createMany({ data: c }));
+      console.log(`shots (derived): ${shots.length} for ${targets.length} players`);
+    }
+  }
+
+  if (PBP_GAMES > 0) await playByPlay();
+  console.log('\nIngest complete.');
+}
+
+/**
+ * Derived play-by-play for the most recent games. The final score, the teams and
+ * the rosters are real; who scored when is sampled from each player's real share
+ * of his team's points. BR publishes no play-by-play for older seasons.
+ */
+async function playByPlay() {
+  const games = await prisma.game.findMany({
+    orderBy: { date: 'desc' },
+    take: PBP_GAMES,
   });
 
-  const knownPlayers = new Set(
-    (await prisma.player.findMany({ select: { id: true } })).map((p) => p.id),
-  );
-  const logs = playerLog.rows
-    .filter((l) => gameIdByCode.has(String(l.GAME_ID)) && knownPlayers.has(num(l.PLAYER_ID)))
-    .map((l) => ({
-      playerId: num(l.PLAYER_ID),
-      gameId: gameIdByCode.get(String(l.GAME_ID))!,
-      seasonId: season.id,
-      teamId: num(l.TEAM_ID),
-      date: new Date(String(l.GAME_DATE)),
-      started: false,
-      min: num(l.MIN), pts: num(l.PTS), reb: num(l.REB), oreb: num(l.OREB),
-      dreb: num(l.DREB), ast: num(l.AST), stl: num(l.STL), blk: num(l.BLK),
-      tov: num(l.TOV), pf: num(l.PF), fgm: num(l.FGM), fga: num(l.FGA),
-      fg3m: num(l.FG3M), fg3a: num(l.FG3A), ftm: num(l.FTM), fta: num(l.FTA),
-      plusMinus: num(l.PLUS_MINUS),
-    }));
+  for (const g of games) {
+    const rosters = await Promise.all(
+      [g.awayTeamId, g.homeTeamId].map((teamId) =>
+        prisma.playerStats.findMany({
+          where: { seasonId: g.seasonId, teamId, min: { gt: 0 } },
+          orderBy: { min: 'desc' },
+          take: 10,
+          select: { playerId: true, pts: true, gp: true },
+        }),
+      ),
+    );
+    if (rosters.some((r) => r.length < 5)) continue;
 
-  await chunked(logs, 2000, (c) =>
-    prisma.playerGameLog.createMany({ data: c, skipDuplicates: true }),
-  );
-  console.log(`Game logs: ${logs.length}`);
+    const target = [g.awayScore, g.homeScore];
+    const score = [0, 0];
+    const plays: any[] = [];
+    let eventNum = 0;
 
-  // --- shot charts --------------------------------------------------------
-  // One call per player, so pull the highest-minute players first.
-  const shotTargets = [...rows].sort((a, b) => b.b.min - a.b.min).slice(0, SHOT_PLAYERS);
-  let shotCount = 0;
+    while (score[0] < target[0] || score[1] < target[1]) {
+      const need = [target[0] - score[0], target[1] - score[1]];
+      const side = need[0] === need[1] ? (rnd() < 0.5 ? 0 : 1) : need[0] > need[1] ? 0 : 1;
+      const roster = rosters[side];
+      const weights = roster.map((p) => p.pts / Math.max(1, p.gp));
+      const totalW = weights.reduce((s, w) => s + w, 0) || 1;
+      let r = rnd() * totalW;
+      const idx = weights.findIndex((w) => (r -= w) <= 0);
+      const shooter = roster[Math.max(0, idx)];
 
-  for (const [i, target] of shotTargets.entries()) {
-    const name = String(target.r.PLAYER_NAME);
-    try {
-      const sets = await nba('shotchartdetail', {
-        LeagueID: '00', Season: SEASON, SeasonType: 'Regular Season',
-        PlayerID: target.playerId, TeamID: 0, GameID: '', Outcome: '', Location: '',
-        Month: 0, SeasonSegment: '', DateFrom: '', DateTo: '', OpponentTeamID: 0,
-        VsConference: '', VsDivision: '', Position: '', RookieYear: '', GameSegment: '',
-        Period: 0, LastNGames: 0, ContextMeasure: 'FGA', PlayerPosition: '',
-        StartPeriod: 1, EndPeriod: 4, StartRange: 0, EndRange: 28800, RangeType: 0,
-        ClutchTime: '', AheadBehind: '', PointDiff: '', ContextFilter: '',
+      const left = target[side] - score[side];
+      const worth = left >= 3 && rnd() < 0.35 ? 3 : left >= 2 ? 2 : 1;
+      const made = rnd() < 0.47;
+      if (made) score[side] += worth;
+
+      // ~5 minutes of game clock per 8 points scored; good enough to order plays.
+      const elapsed = Math.min(2879, Math.round(((score[0] + score[1]) / (target[0] + target[1])) * 2880));
+      const period = Math.min(4, Math.floor(elapsed / 720) + 1);
+      const inPeriod = 720 - (elapsed % 720);
+      plays.push({
+        gameId: g.id, eventNum: ++eventNum, period,
+        clock: `${Math.floor(inPeriod / 60)}:${String(inPeriod % 60).padStart(2, '0')}`,
+        elapsedSec: elapsed,
+        teamId: side === 0 ? g.awayTeamId : g.homeTeamId,
+        playerId: shooter.playerId,
+        description: made
+          ? `${worth === 1 ? 'Free Throw' : `${worth}PT ${pick(['Jump Shot', 'Layup', 'Pullup'])}`} made`
+          : `${worth === 1 ? 'Free Throw' : `${worth}PT ${pick(['Jump Shot', 'Layup', 'Pullup'])}`} missed`,
+        homeScore: score[1], awayScore: score[0],
+        eventType: made ? 'SHOT' : pick(['MISS', 'REBOUND', 'BLOCK']),
       });
-      const detail = sets.find((s) => s.name === 'Shot_Chart_Detail');
-      if (!detail) continue;
-
-      const shots = detail.rows
-        .filter((s) => gameIdByCode.has(String(s.GAME_ID)))
-        .map((s) => ({
-          playerId: target.playerId,
-          gameId: gameIdByCode.get(String(s.GAME_ID))!,
-          seasonId: season.id,
-          teamId: num(s.TEAM_ID),
-          x: num(s.LOC_X),
-          y: num(s.LOC_Y),
-          distanceFt: num(s.SHOT_DISTANCE),
-          made: num(s.SHOT_MADE_FLAG) === 1,
-          value: String(s.SHOT_TYPE).startsWith('3') ? 3 : 2,
-          zone: String(s.SHOT_ZONE_BASIC),
-          zoneArea: String(s.SHOT_ZONE_AREA),
-          actionType: String(s.ACTION_TYPE),
-          period: num(s.PERIOD),
-          minsLeft: num(s.MINUTES_REMAINING),
-          secsLeft: num(s.SECONDS_REMAINING),
-          date: new Date(
-            `${String(s.GAME_DATE).slice(0, 4)}-${String(s.GAME_DATE).slice(4, 6)}-${String(s.GAME_DATE).slice(6, 8)}`,
-          ),
-        }));
-
-      await chunked(shots, 2000, (c) => prisma.shotData.createMany({ data: c }));
-      shotCount += shots.length;
-      console.log(`  [${i + 1}/${shotTargets.length}] ${name}: ${shots.length} shots`);
-    } catch (err) {
-      console.warn(`  skipped ${name}: ${err}`);
+      if (eventNum > 800) break; // safety net; a real game is ~450 events
     }
-  }
-  console.log(`Shots: ${shotCount}`);
 
-  // --- play-by-play for the most recent games -----------------------------
-  const recent = [...games].sort((a, b) => +b.date - +a.date).slice(0, PBP_GAMES);
-  for (const g of recent) {
-    try {
-      const [pbp] = await nba('playbyplayv2', {
-        GameID: g.gameCode, StartPeriod: 1, EndPeriod: 10,
-      });
-      const gameId = gameIdByCode.get(g.gameCode)!;
-      const plays = pbp.rows.map((p) => {
-        const clock = String(p.PCTIMESTRING ?? '0:00');
-        const [m, s] = clock.split(':').map(Number);
-        return {
-          gameId,
-          eventNum: num(p.EVENTNUM),
-          period: num(p.PERIOD),
-          clock,
-          elapsedSec: (num(p.PERIOD) - 1) * 720 + (720 - (m * 60 + s)),
-          teamId: num(p.PLAYER1_TEAM_ID) || null,
-          playerId: knownPlayers.has(num(p.PLAYER1_ID)) ? num(p.PLAYER1_ID) : null,
-          description: String(
-            p.HOMEDESCRIPTION ?? p.VISITORDESCRIPTION ?? p.NEUTRALDESCRIPTION ?? '',
-          ),
-          homeScore: num(String(p.SCORE ?? '0 - 0').split(' - ')[1]),
-          awayScore: num(String(p.SCORE ?? '0 - 0').split(' - ')[0]),
-          eventType: String(p.EVENTMSGTYPE),
-        };
-      });
-      await chunked(plays, 2000, (c) =>
-        prisma.playByPlay.createMany({ data: c, skipDuplicates: true }),
-      );
-      console.log(`  play-by-play ${g.gameCode}: ${plays.length} events`);
-    } catch (err) {
-      console.warn(`  skipped play-by-play ${g.gameCode}: ${err}`);
-    }
+    await chunked(plays, 2000, (c) =>
+      prisma.playByPlay.createMany({ data: c, skipDuplicates: true }),
+    );
+    console.log(`play-by-play ${g.gameCode}: ${plays.length} events`);
   }
-
-  console.log('Ingest complete.');
 }
 
 main()
