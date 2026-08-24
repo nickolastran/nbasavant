@@ -1,4 +1,4 @@
-/** Real NBA team metadata (ids match stats.nba.com so ingest can upsert onto it). */
+/** Real NBA team metadata, covering every franchise that played 2000-01 onward. */
 export const TEAMS = [
   { id: 1610612737, abbreviation: 'ATL', city: 'Atlanta', name: 'Hawks', conference: 'East', division: 'Southeast', primaryColor: '#e03a3e' },
   { id: 1610612738, abbreviation: 'BOS', city: 'Boston', name: 'Celtics', conference: 'East', division: 'Atlantic', primaryColor: '#007a33' },
@@ -30,4 +30,10 @@ export const TEAMS = [
   { id: 1610612761, abbreviation: 'TOR', city: 'Toronto', name: 'Raptors', conference: 'East', division: 'Atlantic', primaryColor: '#ce1141' },
   { id: 1610612762, abbreviation: 'UTA', city: 'Utah', name: 'Jazz', conference: 'West', division: 'Northwest', primaryColor: '#002b5c' },
   { id: 1610612764, abbreviation: 'WAS', city: 'Washington', name: 'Wizards', conference: 'East', division: 'Southeast', primaryColor: '#002b5c' },
+  // Relocated franchises kept as their own rows so pre-move seasons aren't
+  // labelled with the current city. stats.nba.com reuses one id per franchise
+  // across relocations, so these ids are ours (the next free ones in the block).
+  { id: 1610612767, abbreviation: 'SEA', city: 'Seattle', name: 'SuperSonics', conference: 'West', division: 'Northwest', primaryColor: '#00653a' },
+  { id: 1610612768, abbreviation: 'VAN', city: 'Vancouver', name: 'Grizzlies', conference: 'West', division: 'Midwest', primaryColor: '#00727a' },
+  { id: 1610612769, abbreviation: 'NJN', city: 'New Jersey', name: 'Nets', conference: 'East', division: 'Atlantic', primaryColor: '#002a60' },
 ];
