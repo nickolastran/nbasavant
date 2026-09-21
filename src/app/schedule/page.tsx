@@ -4,10 +4,10 @@ import { prisma, getSeason } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
 import { TEAM_OPTIONS, seasonOptions } from '@/lib/options';
 
-export const metadata = { title: 'Games' };
+export const metadata = { title: 'Schedule' };
 export const revalidate = 60;
 
-export default async function GamesPage({
+export default async function SchedulePage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string>>;
@@ -45,7 +45,7 @@ export default async function GamesPage({
 
   return (
     <div>
-      <h1 className="mb-1 text-xl font-bold tracking-tight">Games</h1>
+      <h1 className="mb-1 text-xl font-bold tracking-tight">Schedule</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
         {games.length} games in {seasonKey}. Open one for the box score and play-by-play.
       </p>
@@ -53,7 +53,7 @@ export default async function GamesPage({
       <Suspense>
         <FilterBar
           fields={[
-            { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons) },
+            { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
             { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS },
             { kind: 'text', name: 'date', label: 'Date', placeholder: 'YYYY-MM-DD' },
           ]}

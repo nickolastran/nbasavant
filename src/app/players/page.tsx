@@ -75,7 +75,7 @@ export default async function PlayersPage({
       <Suspense>
         <FilterBar
           fields={[
-            { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons) },
+            { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
             { kind: 'text', name: 'q', label: 'Name', placeholder: 'Search' },
             { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS },
             { kind: 'select', name: 'position', label: 'Position', options: POSITION_OPTIONS },

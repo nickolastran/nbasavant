@@ -1,108 +1,92 @@
-import { Suspense } from 'react';
+import Link from 'next/link';
 import { prisma, getSeason } from '@/lib/db';
-import { FilterBar } from '@/components/FilterBar';
-import { StatTable } from '@/components/StatTable';
-import { TrendChart } from '@/components/TrendChart';
-import { seasonOptions } from '@/lib/options';
+import { TeamMark } from '@/components/TeamMark';
 
-export const metadata = { title: 'Team Analytics' };
-export const revalidate = 60;
+export const metadata = { title: 'Teams' };
+export const revalidate = 300;
 
+/** All 30 franchises by conference and division, each with this season's record. */
+export default async function TeamsPage() {
+  const season = await getSeason();
+  const [teams, stats] = await Promise.all([
+    prisma.team.findMany({ orderBy: [{ conference: 'asc' }, { division: 'asc' }, { city: 'asc' }] }),
+    season
+      ? prisma.teamStats.findMany({
+          where: { seasonId: season.id },
+          select: { teamId: true, wins: true, losses: true, netRtg: true },
+        })
+      : [],
+  ]);
 
-export default async function TeamsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string>>;
-}) {
-  const sp = await searchParams;
-  const active = await getSeason();
-  const seasonKey = sp.season || active?.key;
-  const seasons = await prisma.season.findMany({ orderBy: { startYear: 'desc' } });
+  const record = new Map(stats.map((s) => [s.teamId, s]));
+  // Only franchises with a row for the current season are active ones.
+  const current = teams.filter((t) => record.has(t.id));
 
-  const teams = await prisma.teamStats.findMany({
-    where: {
-      season: { key: seasonKey },
-      ...(sp.conference ? { team: { conference: sp.conference } } : {}),
-    },
-    include: { team: true },
-    orderBy: { netRtg: 'desc' },
-  });
-
-  const rows = teams.map((t) => ({
-    team: `${t.team.city} ${t.team.name}`,
-    abbr: t.team.abbreviation,
-    conf: t.team.conference,
-    div: t.team.division,
-    wins: t.wins, losses: t.losses,
-    pace: t.pace, ortg: t.ortg, drtg: t.drtg, netRtg: t.netRtg,
-    efgPct: t.efgPct, tovPct: t.tovPct, orebPct: t.orebPct, ftRate: t.ftRate,
-    oppEfgPct: t.oppEfgPct, oppTovPct: t.oppTovPct, drebPct: t.drebPct,
-    sos: t.sos,
+  const byConf = ['East', 'West'].map((conference) => ({
+    conference,
+    divisions: [...new Set(current.filter((t) => t.conference === conference).map((t) => t.division))]
+      .sort()
+      .map((division) => ({
+        division,
+        teams: current.filter((t) => t.conference === conference && t.division === division),
+      })),
   }));
 
-  const paceData = [...rows]
-    .sort((a, b) => b.pace - a.pace)
-    .map((r) => ({ label: r.abbr, pace: r.pace, netRtg: r.netRtg }));
-
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="mb-1 text-xl font-bold tracking-tight">Team Analytics</h1>
-        <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
-          Ratings are per 100 possessions, so they compare cleanly across teams that play at
-          different speeds.
-        </p>
-        <Suspense>
-          <FilterBar
-            fields={[
-              { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons) },
-              {
-                kind: 'select', name: 'conference', label: 'Conference',
-                options: [
-                  { value: '', label: 'Both' },
-                  { value: 'East', label: 'East' },
-                  { value: 'West', label: 'West' },
-                ],
-              },
-            ]}
-          />
-        </Suspense>
-        <StatTable
-          rows={rows}
-          cols={[
-            { key: 'team', label: 'Team' },
-            { key: 'conf', label: 'Conf' },
-            { key: 'div', label: 'Division' },
-            { key: 'wins', label: 'W' },
-            { key: 'losses', label: 'L' },
-            { key: 'ortg', label: 'ORtg', dp: 1, shade: true, title: 'Points scored per 100 possessions' },
-            { key: 'drtg', label: 'DRtg', dp: 1, shade: true, lowerIsBetter: true, title: 'Points allowed per 100 possessions' },
-            { key: 'netRtg', label: 'NetRtg', dp: 1, shade: true },
-            { key: 'pace', label: 'Pace', dp: 1, shade: true, title: 'Possessions per 48 minutes' },
-            { key: 'efgPct', label: 'eFG%', dp: 1, shade: true },
-            { key: 'tovPct', label: 'TOV%', dp: 1, shade: true, lowerIsBetter: true },
-            { key: 'orebPct', label: 'OREB%', dp: 1, shade: true },
-            { key: 'ftRate', label: 'FT Rate', dp: 1, shade: true },
-            { key: 'oppEfgPct', label: 'Opp eFG%', dp: 1, shade: true, lowerIsBetter: true },
-            { key: 'oppTovPct', label: 'Opp TOV%', dp: 1, shade: true },
-            { key: 'drebPct', label: 'DREB%', dp: 1, shade: true },
-            { key: 'sos', label: 'SOS', dp: 2, shade: true, title: 'Strength of schedule, points per 100 above average' },
-          ]}
-          initialSort="netRtg"
-          filename={`teams-${seasonKey}`}
-          pageSize={30}
-        />
-      </div>
+    <div>
+      <h1 className="mb-1 text-xl font-bold tracking-tight">Teams</h1>
+      <p className="mb-5 text-sm" style={{ color: 'var(--ink-2)' }}>
+        {current.length} franchises, {season?.key ?? 'current'} records. Open one for its full
+        analytics profile.
+      </p>
 
-      <div>
-        {/* Pace alone: net rating shares no scale with it, so it gets the table
-            rather than a second y-axis. */}
-        <TrendChart
-          title="Pace, fastest to slowest"
-          data={paceData}
-          series={[{ key: 'pace', label: 'Possessions per 48 minutes' }]}
-          height={420}
-        />
+      <div className="grid gap-6 lg:grid-cols-2">
+        {byConf.map((c) => (
+          <section key={c.conference}>
+            <h2 className="eyebrow mb-2">{c.conference}ern Conference</h2>
+            <div className="space-y-4">
+              {c.divisions.map((d) => (
+                <div key={d.division} className="panel overflow-hidden">
+                  <h3
+                    className="border-b px-3 py-1.5 text-[0.6875rem] font-bold uppercase tracking-[0.12em]"
+                    style={{ borderColor: 'var(--line)', background: 'var(--panel-2)' }}
+                  >
+                    {d.division}
+                  </h3>
+                  <ul>
+                    {d.teams.map((t) => {
+                      const r = record.get(t.id);
+                      return (
+                        <li key={t.id}>
+                          <Link
+                            href={`/team-stats?team=${t.abbreviation}`}
+                            className="flex items-center gap-3 border-b px-3 py-2 no-underline transition-colors last:border-b-0 hover:bg-[var(--panel-2)]"
+                            style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
+                          >
+                            <TeamMark abbr={t.abbreviation} color={t.primaryColor} size={26} />
+                            <span className="text-sm font-semibold">{t.abbreviation}</span>
+                            <span className="flex-1 text-sm" style={{ color: 'var(--ink-2)' }}>
+                              {t.city} {t.name}
+                            </span>
+                            <span className="tnum text-sm">
+                              {r ? `${r.wins}-${r.losses}` : '—'}
+                            </span>
+                            <span
+                              className="tnum w-12 text-right text-[0.75rem]"
+                              style={{ color: (r?.netRtg ?? 0) >= 0 ? 'var(--hot)' : 'var(--cold)' }}
+                            >
+                              {r ? `${r.netRtg > 0 ? '+' : ''}${r.netRtg.toFixed(1)}` : ''}
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

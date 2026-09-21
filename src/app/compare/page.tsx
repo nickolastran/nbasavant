@@ -115,7 +115,7 @@ export default async function ComparePage({
         </p>
         <Suspense>
           <ComparePicker selected={cards.map((c) => ({ id: c.id, name: c.name, color: c.color }))} />
-          <FilterBar fields={[{ kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons) }]} />
+          <FilterBar fields={[{ kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey }]} />
         </Suspense>
       </div>
 

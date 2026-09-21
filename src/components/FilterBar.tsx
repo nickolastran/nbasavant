@@ -3,9 +3,20 @@
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 export type Field =
-  | { kind: 'select'; name: string; label: string; options: { value: string; label: string }[] }
-  | { kind: 'number'; name: string; label: string; min?: number; max?: number; step?: number }
-  | { kind: 'text'; name: string; label: string; placeholder?: string };
+  | {
+      kind: 'select';
+      name: string;
+      label: string;
+      options: { value: string; label: string }[];
+      /**
+       * What the page renders when the URL says nothing. Without it a select
+       * whose options have no '' entry shows its first option, which is a
+       * different season from the one on screen.
+       */
+      defaultValue?: string;
+    }
+  | { kind: 'number'; name: string; label: string; min?: number; max?: number; step?: number; defaultValue?: string }
+  | { kind: 'text'; name: string; label: string; placeholder?: string; defaultValue?: string };
 
 /**
  * Filters live in the URL, so every view is linkable and the back button works.
@@ -32,7 +43,7 @@ export function FilterBar({ fields }: { fields: Field[] }) {
         <label key={f.name} className="flex flex-col gap-1">
           <span className="eyebrow">{f.label}</span>
           {f.kind === 'select' ? (
-            <select value={sp.get(f.name) ?? ''} onChange={(e) => set(f.name, e.target.value)}>
+            <select value={sp.get(f.name) ?? f.defaultValue ?? ''} onChange={(e) => set(f.name, e.target.value)}>
               {f.options.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -42,7 +53,7 @@ export function FilterBar({ fields }: { fields: Field[] }) {
           ) : (
             <input
               type={f.kind === 'number' ? 'number' : 'search'}
-              defaultValue={sp.get(f.name) ?? ''}
+              defaultValue={sp.get(f.name) ?? f.defaultValue ?? ''}
               placeholder={f.kind === 'text' ? f.placeholder : undefined}
               min={f.kind === 'number' ? f.min : undefined}
               max={f.kind === 'number' ? f.max : undefined}

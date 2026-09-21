@@ -79,13 +79,13 @@ export default async function Home() {
         </div>
 
         <div className="space-y-4">
-          <Panel title="Top of the league" href="/teams" hrefLabel="All teams">
+          <Panel title="Top of the league" href="/team-stats" hrefLabel="All teams">
             <ul className="divide-y" style={{ borderColor: 'var(--line)' }}>
               {topTeams.map((t, i) => (
                 <li key={t.teamId} className="flex items-center gap-3 py-2">
                   <span className="eyebrow w-4 tnum">{i + 1}</span>
                   <span className="h-6 w-1 rounded-sm" style={{ background: t.team.primaryColor }} />
-                  <Link href={`/teams?team=${t.team.abbreviation}`} className="link flex-1 text-sm font-medium">
+                  <Link href={`/team-stats?team=${t.team.abbreviation}`} className="link flex-1 text-sm font-medium">
                     {t.team.city} {t.team.name}
                   </Link>
                   <span className="tnum text-sm">
@@ -101,7 +101,7 @@ export default async function Home() {
             <p className="eyebrow mt-2">Sorted by net rating (points per 100 possessions)</p>
           </Panel>
 
-          <Panel title="Latest games" href="/games" hrefLabel="All games">
+          <Panel title="Latest games" href="/scores" hrefLabel="All games">
             <ul className="divide-y" style={{ borderColor: 'var(--line)' }}>
               {games.map((g) => (
                 <li key={g.id}>

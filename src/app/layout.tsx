@@ -3,21 +3,12 @@ import Link from 'next/link';
 import './globals.css';
 import { PlayerSearch } from '@/components/PlayerSearch';
 import { ScoreboardBar } from '@/components/ScoreboardBar';
+import { SiteNav } from '@/components/SiteNav';
 
 export const metadata: Metadata = {
   title: { default: 'NBA Savant', template: '%s · NBA Savant' },
   description: 'Shot charts, advanced metrics and play-by-play for every NBA player and team.',
 };
-
-const NAV = [
-  { href: '/', label: 'Home' },
-  { href: '/players', label: 'Players' },
-  { href: '/explorer', label: 'Stat Explorer' },
-  { href: '/shots', label: 'Shot Charts' },
-  { href: '/teams', label: 'Teams' },
-  { href: '/games', label: 'Games' },
-  { href: '/compare', label: 'Compare' },
-];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -31,36 +22,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        <header style={{ background: 'var(--chrome)', color: 'var(--on-chrome)' }}>
-          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
-            <Link href="/" className="flex items-baseline gap-2 no-underline" style={{ color: 'var(--on-chrome)' }}>
-              <span className="text-xl font-extrabold tracking-tight">NBA</span>
-              <span
-                className="text-xl font-light tracking-[0.2em] uppercase"
-                style={{ color: 'var(--accent)' }}
-              >
-                Savant
+        <header className="border-b" style={{ background: 'var(--chrome)', borderColor: 'var(--line)' }}>
+          <div className="mx-auto flex max-w-[1440px] items-center gap-4 px-4 py-3">
+            <Link
+              href="/"
+              className="flex items-baseline text-lg font-extrabold uppercase tracking-tight no-underline"
+              style={{ color: 'var(--ink)' }}
+            >
+              NBA
+              <span className="px-[1px] font-light" style={{ color: 'var(--ink-3)' }}>
+                //
               </span>
+              Savant
             </Link>
-
-            <nav className="order-3 -mx-1 flex w-full gap-1 overflow-x-auto md:order-none md:mx-0 md:w-auto">
-              {NAV.slice(1).map((n) => (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  className="whitespace-nowrap rounded px-2.5 py-1.5 text-[0.8125rem] font-medium no-underline transition-colors hover:bg-white/10"
-                  style={{ color: 'var(--on-chrome)' }}
-                >
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
 
             <div className="ml-auto flex items-center gap-3">
               <PlayerSearch />
             </div>
           </div>
         </header>
+
+        <SiteNav />
 
         <ScoreboardBar />
 

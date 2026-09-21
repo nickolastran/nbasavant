@@ -265,3 +265,17 @@ export function shotZone(x: number, y: number): { zone: string; area: string; va
 /** Points per shot, the number the heat map is actually colored by. */
 export const pointsPerShot = (made: number, attempts: number, value: number) =>
   div(made * value, attempts);
+
+// --- Standings ------------------------------------------------------------
+
+/** Winning percentage. A team that hasn't played yet sits at .000, not NaN. */
+export const winPct = (w: number, l: number) => div(w, w + l);
+
+/**
+ * Games behind the conference leader: the average of the win gap and the loss
+ * gap, which is the league's own definition and why half-games exist.
+ */
+export const gamesBehind = (
+  lead: { wins: number; losses: number },
+  team: { wins: number; losses: number },
+) => (lead.wins - team.wins + (team.losses - lead.losses)) / 2;

@@ -46,6 +46,19 @@ export async function GET(req: NextRequest) {
     skip: offset,
   });
 
+  // Records shown beside each team. One lookup for the whole page of games.
+  // ponytail: season-final W-L, not as-of-tip-off; swap for a games-played-
+  // before-this-date count if in-season back-dating ever needs to be exact.
+  const records = new Map<string, string>();
+  if (games.length) {
+    const rows = await prisma.teamStats.findMany({
+      where: { seasonId: { in: [...new Set(games.map((g) => g.seasonId))] } },
+      select: { teamId: true, seasonId: true, wins: true, losses: true },
+    });
+    for (const r of rows) records.set(`${r.seasonId}:${r.teamId}`, `${r.wins}-${r.losses}`);
+  }
+  const record = (seasonId: number, teamId: number) => records.get(`${seasonId}:${teamId}`) ?? '';
+
   return respond(
     games.map((g) => ({
       id: g.id,
@@ -59,6 +72,8 @@ export async function GET(req: NextRequest) {
       awayColor: g.awayTeam.primaryColor,
       homeScore: g.homeScore,
       awayScore: g.awayScore,
+      homeRecord: record(g.seasonId, g.homeTeamId),
+      awayRecord: record(g.seasonId, g.awayTeamId),
     })),
     sp,
     'games',

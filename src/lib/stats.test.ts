@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
-  tovPct, tsPct, uPer, usgPct, vorp, winShares,
+  gamesBehind, tovPct, tsPct, uPer, usgPct, vorp, winPct, winShares,
 } from './stats';
 
 const near = (a: number, b: number, eps = 0.05, msg = '') =>
@@ -123,5 +123,15 @@ assert.equal(shotZone(0, 150).zone, 'Mid-Range', 'mid-range');
 assert.equal(shotZone(230, 200).value, 3, 'deep wing is a three');
 // A shot 22ft out but above the break is still a two.
 assert.equal(shotZone(0, 220).value, 2, 'inside the arc above the break');
+
+// --- Standings ------------------------------------------------------------
+near(winPct(60, 22), 0.7317, 0.0001, 'winning percentage');
+assert.equal(winPct(0, 0), 0, 'an unplayed season is .000, not NaN');
+const lead = { wins: 64, losses: 18 };
+assert.equal(gamesBehind(lead, lead), 0, 'the leader is never behind itself');
+assert.equal(gamesBehind(lead, { wins: 62, losses: 20 }), 2, 'two fewer wins and two more losses is 2 GB');
+// One extra loss with the same wins is half a game, which is the whole reason
+// the column carries a decimal.
+assert.equal(gamesBehind(lead, { wins: 64, losses: 19 }), 0.5, 'half a game back');
 
 console.log('stats.ts: all checks passed');

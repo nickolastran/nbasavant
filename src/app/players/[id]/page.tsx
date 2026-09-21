@@ -148,7 +148,7 @@ export default async function PlayerPage({
       </header>
 
       <Suspense>
-        <FilterBar fields={[{ kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons) }]} />
+        <FilterBar fields={[{ kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey }]} />
       </Suspense>
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

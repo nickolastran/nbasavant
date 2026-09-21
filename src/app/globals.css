@@ -3,22 +3,24 @@
 @tailwind utilities;
 
 /*
- * Palette: navy chrome (the scoreboard), paper content, and one diverging
- * cold->hot pair that means the same thing everywhere on the site — blue is
- * below league average, red is above. Validated for CVD.
+ * Palette: newsprint. A cream page, white cards, hairline rules and one blue
+ * that means "interactive" everywhere — links, tip-off times, the sign-in
+ * button. The cold->hot pair is kept apart for charts: blue is below league
+ * average, red is above. Validated for CVD.
  */
 :root {
-  --surface: #fcfcfb;
+  --surface: #f2f1ec;
   --panel: #ffffff;
-  --panel-2: #f4f6f9;
-  --line: #dde3ea;
-  --ink: #0d1b2a;
-  --ink-2: #4a5a6b;
-  --ink-3: #7d8b99;
-  --chrome: #0d2137;
-  --chrome-2: #16375a;
-  --on-chrome: #eaf1f8;
-  --accent: #c8102e;
+  --panel-2: #f7f6f2;
+  --line: #d9d6cd;
+  --line-2: #c3bfb4;
+  --ink: #16181c;
+  --ink-2: #4d525a;
+  --ink-3: #8b8f96;
+  --chrome: #ffffff;
+  --chrome-2: #f2f1ec;
+  --on-chrome: #16181c;
+  --accent: #1450c8;
   --cold: #2f6fb2;
   --hot: #c8102e;
   --mid: #b9c0c8;
@@ -27,7 +29,7 @@
   --s2: #c8102e;
   --s3: #7a5fc4;
   --s4: #c98a20;
-  --shadow: 0 1px 2px rgba(13, 33, 55, 0.08), 0 4px 16px rgba(13, 33, 55, 0.06);
+  --shadow: 0 1px 2px rgba(22, 24, 28, 0.06), 0 8px 24px rgba(22, 24, 28, 0.08);
 }
 
 html {
@@ -82,8 +84,9 @@ body {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--chrome);
-  color: var(--on-chrome);
+  background: var(--panel-2);
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line-2);
   font-size: 0.6875rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -190,4 +193,31 @@ a:focus-visible {
 }
 .recharts-cartesian-grid line {
   stroke: var(--line);
+}
+
+/* Nav tabs: bordered, uppercase, letter-spaced — the row of section buttons
+   under the wordmark. Active tab inverts. */
+.tab {
+  display: inline-block;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--ink-2);
+  border-radius: 3px;
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background-color 0.12s, color 0.12s;
+}
+.tab:hover {
+  background: var(--panel-2);
+  color: var(--ink);
+}
+.tab[aria-current='page'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
 }

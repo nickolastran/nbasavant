@@ -128,7 +128,7 @@ export default async function ShotsPage({
       <Suspense>
         <FilterBar
           fields={[
-            { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons) },
+            { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
             { kind: 'text', name: 'player', label: 'Shooter', placeholder: 'Player name' },
             { kind: 'text', name: 'defender', label: 'Defender', placeholder: 'Player name' },
             { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS },
