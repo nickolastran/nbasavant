@@ -7,7 +7,7 @@ import { SiteNav } from '@/components/SiteNav';
 
 export const metadata: Metadata = {
   title: { default: 'NBA Savant', template: '%s · NBA Savant' },
-  description: 'Shot charts, advanced metrics and play-by-play for every NBA player and team.',
+  description: 'Live scores, standings, stats and Savant-style analytics for every NBA season since 1946-47.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -56,8 +56,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3">
             <span>
-              Real NBA data, 2000-01 to 2025-26, from basketball-reference.com. Shot coordinates
-              and play-by-play are derived to match the published totals.
+              Every season since 1946-47 from basketball-reference.com; scores, box scores, play-by-play,
+              shots, rosters and transactions from the NBA&apos;s own feeds. Shot charts before 2026-27 are
+              derived to match each player&apos;s published shooting splits.
             </span>
             <a href="/api-docs" className="link">
               API docs

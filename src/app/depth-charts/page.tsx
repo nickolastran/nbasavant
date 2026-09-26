@@ -4,6 +4,7 @@ import { prisma, getSeason } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
 import { TeamMark } from '@/components/TeamMark';
 import { TEAM_OPTIONS, seasonOptions } from '@/lib/options';
+import { fmt, perGame } from '@/lib/format';
 
 export const metadata = { title: 'Depth Charts' };
 export const revalidate = 300;
@@ -80,8 +81,8 @@ export default async function DepthChartsPage({
                 <span className="text-sm font-bold">
                   {t.city} {t.name}
                 </span>
-                <Link href={`/team-stats?team=${t.abbreviation}`} className="link ml-auto text-xs">
-                  Team stats
+                <Link href={`/teams/${t.abbreviation}?season=${seasonKey}`} className="link ml-auto text-xs">
+                  Team page
                 </Link>
               </h2>
               <table className="stat-table">
@@ -105,7 +106,7 @@ export default async function DepthChartsPage({
                               <Link href={`/players/${depth[i].player.id}`} className="link">
                                 {depth[i].player.fullName}
                                 <span className="tnum ml-1.5 text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
-                                  {(depth[i].min / Math.max(1, depth[i].gp)).toFixed(1)}m
+                                  {fmt(perGame(depth[i].min, depth[i].gp))}m
                                 </span>
                               </Link>
                             ) : (

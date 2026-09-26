@@ -35,7 +35,7 @@ export async function GET() {
             { name: 'q', in: 'query', schema: { type: 'string' }, description: 'Name substring' },
             { name: 'team', in: 'query', schema: { type: 'string', example: 'GSW' } },
             { name: 'position', in: 'query', schema: { type: 'string', example: 'G' } },
-            { name: 'active', in: 'query', schema: { type: 'boolean', default: true } },
+            { name: 'active', in: 'query', schema: { type: 'boolean' }, description: 'true: only players on a current roster. Default: everyone since 1946-47, current players first.' },
             formatParam, ...paging,
           ],
           responses: ok,
@@ -134,7 +134,7 @@ export async function GET() {
       },
       '/games/{id}': {
         get: {
-          summary: 'Box score and play-by-play',
+          summary: 'One game. From 2026-27: live box score, team stats and play-by-play from the NBA feed',
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
           responses: { ...ok, '404': { description: 'Game not found' } },
         },
@@ -148,6 +148,12 @@ export async function GET() {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 5 } },
           ],
           responses: ok,
+        },
+      },
+      '/live/scoreboard': {
+        get: {
+          summary: "Today's games, live: status, clock, score, records, top performers (cached 10 s)",
+          responses: { ...ok, '502': { description: "The NBA's feed can't be reached" } },
         },
       },
       '/compare': {

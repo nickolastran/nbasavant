@@ -26,10 +26,13 @@ export default async function Home() {
             gp: { gte: 10 },
             ...('minFga' in c && c.minFga ? { fga: { gte: c.minFga } } : {}),
           },
-          orderBy: { [c.key]: 'desc' },
+          // A stat nobody kept yet is null, and Postgres sorts those first unless
+          // told otherwise (ppg is never null, and Prisma rejects the option there).
+          orderBy: c.key === 'ppg' ? { ppg: 'desc' } : { [c.key]: { sort: 'desc', nulls: 'last' } },
           take: 5,
           include: {
-            player: { select: { id: true, fullName: true, team: { select: { abbreviation: true } } } },
+            team: { select: { abbreviation: true } },
+            player: { select: { id: true, fullName: true } },
           },
         }),
       })),
@@ -85,15 +88,14 @@ export default async function Home() {
                 <li key={t.teamId} className="flex items-center gap-3 py-2">
                   <span className="eyebrow w-4 tnum">{i + 1}</span>
                   <span className="h-6 w-1 rounded-sm" style={{ background: t.team.primaryColor }} />
-                  <Link href={`/team-stats?team=${t.team.abbreviation}`} className="link flex-1 text-sm font-medium">
-                    {t.team.city} {t.team.name}
+                  <Link href={`/teams/${t.team.abbreviation}`} className="link flex-1 text-sm font-medium">
+                    {t.name ?? `${t.team.city} ${t.team.name}`}
                   </Link>
                   <span className="tnum text-sm">
                     {t.wins}-{t.losses}
                   </span>
                   <span className="tnum w-14 text-right text-sm font-semibold" style={{ color: 'var(--hot)' }}>
-                    {t.netRtg > 0 ? '+' : ''}
-                    {t.netRtg.toFixed(1)}
+                    {t.netRtg === null ? '—' : `${t.netRtg > 0 ? '+' : ''}${t.netRtg.toFixed(1)}`}
                   </span>
                 </li>
               ))}
@@ -132,7 +134,7 @@ export default async function Home() {
                     <Link href={`/players/${r.player.id}`} className="link flex-1 truncate">
                       {r.player.fullName}
                     </Link>
-                    <span className="eyebrow">{r.player.team?.abbreviation}</span>
+                    <span className="eyebrow">{r.team?.abbreviation}</span>
                     <span className="tnum font-semibold">{cat.fmt(r[cat.key] as number)}</span>
                   </li>
                 ))}
@@ -148,7 +150,7 @@ export default async function Home() {
           { href: '/explorer', title: 'Stat Explorer', body: 'Sort and filter every player-season, then export it.' },
           { href: '/shots', title: 'Shot Chart Analyzer', body: 'Filter shots by zone, distance, defender and period.' },
           { href: '/compare', title: 'Compare Players', body: 'Up to four players side by side, box score and advanced.' },
-          { href: '/teams', title: 'Team Analytics', body: 'Ratings, pace, four factors and defense by position.' },
+          { href: '/teams', title: 'Teams', body: 'Rosters, leaders, schedules and every season since 1946-47.' },
         ].map((c) => (
           <Link
             key={c.href}
@@ -192,8 +194,8 @@ function EmptyState() {
     <div className="panel p-8 text-center">
       <h1 className="text-lg font-semibold">No seasons in the database yet</h1>
       <p className="mt-2 text-sm" style={{ color: 'var(--ink-2)' }}>
-        Run <code>npm run db:seed</code> to load the sample league, or <code>npm run ingest</code> to
-        pull live data from stats.nba.com.
+        Run <code>npm run ingest</code> to load every season since 1946-47 from basketball-reference, then{' '}
+        <code>npm run sync</code> for the current season from the NBA&apos;s feeds.
       </p>
     </div>
   );

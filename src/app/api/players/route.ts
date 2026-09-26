@@ -2,7 +2,11 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { page, respond } from '@/lib/api';
 
-/** GET /api/players?q=curry&team=GSW&position=G&limit=50 */
+/**
+ * GET /api/players?q=curry&team=GSW&position=G&active=true&limit=50
+ * Everyone since 1946-47 by default, current players first; active=true
+ * narrows it to today's rosters.
+ */
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const { limit, offset } = page(sp);
@@ -15,10 +19,10 @@ export async function GET(req: NextRequest) {
       ...(q ? { fullName: { contains: q, mode: 'insensitive' } } : {}),
       ...(team ? { team: { abbreviation: team } } : {}),
       ...(position ? { position: { contains: position } } : {}),
-      ...(sp.get('active') === 'false' ? {} : { active: true }),
+      ...(sp.get('active') === 'true' ? { active: true } : {}),
     },
     include: { team: { select: { abbreviation: true, city: true, name: true } } },
-    orderBy: { lastName: 'asc' },
+    orderBy: [{ active: 'desc' }, { lastName: 'asc' }, { firstName: 'asc' }],
     take: limit,
     skip: offset,
   });
@@ -32,6 +36,7 @@ export async function GET(req: NextRequest) {
       team: p.team?.abbreviation ?? null,
       heightIn: p.heightIn,
       weightLb: p.weightLb,
+      active: p.active,
     })),
     sp,
     'players',

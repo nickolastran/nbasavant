@@ -3,11 +3,12 @@ import { prisma, getSeason } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
 import { StatTable, type Col } from '@/components/StatTable';
 import { TEAM_OPTIONS, POSITION_OPTIONS, seasonOptions } from '@/lib/options';
+import { perGame } from '@/lib/format';
 
 export const metadata = { title: 'Stat Explorer' };
 export const revalidate = 60;
 
-type Row = Record<string, string | number>;
+type Row = Record<string, string | number | null>;
 
 /** Column groups the picker offers; box score is always on. */
 const GROUPS = {
@@ -94,9 +95,9 @@ export default async function ExplorerPage({
       include: { team: true },
     });
     const rows: Row[] = teams.map((t) => ({
-      team: `${t.team.city} ${t.team.name}`,
+      team: t.name ?? `${t.team.city} ${t.team.name}`,
       abbr: t.team.abbreviation,
-      conf: t.team.conference,
+      conf: t.conference ?? t.division ?? '',
       gp: t.gp, wins: t.wins, losses: t.losses,
       pace: t.pace, ortg: t.ortg, drtg: t.drtg, netRtg: t.netRtg,
       efgPct: t.efgPct, tsPct: t.tsPct, tovPct: t.tovPct,
@@ -138,15 +139,16 @@ export default async function ExplorerPage({
     where: {
       season: { key: seasonKey },
       gp: { gte: minGp },
-      ...(sp.team ? { player: { team: { abbreviation: sp.team } } } : {}),
+      // The team he played for that season, not the one he's on now.
+      ...(sp.team ? { team: { abbreviation: sp.team } } : {}),
       ...(sp.position ? { player: { position: sp.position } } : {}),
     },
     include: {
+      team: { select: { abbreviation: true } },
       player: {
         select: {
           id: true, fullName: true, position: true,
-          team: { select: { abbreviation: true } },
-          advancedStats: true,
+          advancedStats: { where: { season: { key: seasonKey } } },
         },
       },
     },
@@ -154,22 +156,21 @@ export default async function ExplorerPage({
   });
 
   const rows: Row[] = stats.map((s) => {
-    const a = s.player.advancedStats.find((x) => x.seasonId === s.seasonId);
+    const a = s.player.advancedStats[0];
     return {
       player: s.player.fullName,
       playerId: s.playerId,
-      team: s.player.team?.abbreviation ?? '',
+      team: s.team?.abbreviation ?? '',
       pos: s.player.position ?? '',
-      gp: s.gp, mpg: s.gp ? s.min / s.gp : 0,
+      gp: s.gp, mpg: perGame(s.min, s.gp),
       ppg: s.ppg, rpg: s.rpg, apg: s.apg,
-      spg: s.gp ? s.stl / s.gp : 0, bpg: s.gp ? s.blk / s.gp : 0,
-      topg: s.gp ? s.tov / s.gp : 0,
+      spg: perGame(s.stl, s.gp), bpg: perGame(s.blk, s.gp), topg: perGame(s.tov, s.gp),
       fgPct: s.fgPct, fg3Pct: s.fg3Pct, ftPct: s.ftPct,
       efgPct: s.efgPct, tsPct: s.tsPct, fga: s.fga, fg3a: s.fg3a,
-      per: a?.per ?? 0, usgPct: s.usgPct, ortg: a?.ortg ?? 0, drtg: a?.drtg ?? 0,
-      ws: a?.ws ?? 0, ws48: a?.ws48 ?? 0, obpm: a?.obpm ?? 0, dbpm: a?.dbpm ?? 0,
-      bpm: a?.bpm ?? 0, vorp: a?.vorp ?? 0,
-      astPct: a?.astPct ?? 0, rebPct: a?.rebPct ?? 0, tovPct: a?.tovPct ?? 0,
+      per: a?.per ?? null, usgPct: s.usgPct, ortg: a?.ortg ?? null, drtg: a?.drtg ?? null,
+      ws: a?.ws ?? null, ws48: a?.ws48 ?? null, obpm: a?.obpm ?? null, dbpm: a?.dbpm ?? null,
+      bpm: a?.bpm ?? null, vorp: a?.vorp ?? null,
+      astPct: a?.astPct ?? null, rebPct: a?.rebPct ?? null, tovPct: a?.tovPct ?? null,
     };
   });
 

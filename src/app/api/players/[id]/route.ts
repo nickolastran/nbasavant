@@ -28,7 +28,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     weightLb: player.weightLb,
     birthDate: player.birthDate,
     country: player.country,
+    college: player.college,
     draftYear: player.draftYear,
+    draftRound: player.draftRound,
+    draftPick: player.draftPick,
+    active: player.active,
     team: player.team && {
       id: player.team.id,
       abbreviation: player.team.abbreviation,

@@ -9,9 +9,9 @@ export const metadata = { title: 'Draft' };
 export const revalidate = 3600;
 
 /**
- * Players by draft class. `Player.draftYear` is the only draft column the
- * schema carries — there is no pick number or drafting team — so the class is
- * listed by career production rather than in pick order.
+ * Players by draft class, in pick order, from the NBA's player index. Only
+ * picks who played appear (the index covers players, not the whole draft
+ * board), and the drafting team isn't in it.
  */
 export default async function DraftPage({
   searchParams,
@@ -44,15 +44,15 @@ export default async function DraftPage({
   const players = await prisma.player.findMany({
     where: { draftYear: Number(year) },
     include: { team: { select: { abbreviation: true, primaryColor: true } } },
-    orderBy: { lastName: 'asc' },
+    orderBy: [{ draftPick: { sort: 'asc', nulls: 'last' } }, { lastName: 'asc' }],
   });
 
   return (
     <div>
       <h1 className="mb-1 text-xl font-bold tracking-tight">{year} Draft Class</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
-        {players.length} players. Pick number and drafting team aren&apos;t in the source data, so
-        the class is listed alphabetically.
+        {players.length} players from this class reached the NBA, in pick order. The drafting team isn&apos;t
+        in the source data.
       </p>
 
       <Suspense>
@@ -73,8 +73,10 @@ export default async function DraftPage({
           <thead>
             <tr>
               <th style={{ cursor: 'default' }}>Player</th>
+              <th style={{ cursor: 'default' }}>Rd</th>
+              <th style={{ cursor: 'default' }}>Pick</th>
               <th style={{ cursor: 'default' }}>Pos</th>
-              <th style={{ cursor: 'default' }}>Team</th>
+              <th style={{ cursor: 'default' }}>Latest team</th>
               <th style={{ cursor: 'default' }}>Country</th>
               <th style={{ cursor: 'default' }}>Active</th>
             </tr>
@@ -87,6 +89,8 @@ export default async function DraftPage({
                     {p.fullName}
                   </Link>
                 </td>
+                <td>{p.draftRound ?? '—'}</td>
+                <td>{p.draftPick ?? '—'}</td>
                 <td>{p.position ?? '—'}</td>
                 <td>
                   {p.team ? (

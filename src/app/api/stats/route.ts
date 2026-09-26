@@ -14,6 +14,13 @@ const ADV_SORTS = ['per', 'bpm', 'obpm', 'dbpm', 'vorp', 'ws', 'ws48', 'ortg', '
  * The Advanced Stats Explorer's backing query: one row per player-season with
  * box score and advanced metrics joined.
  */
+/** Columns that are null in seasons the league didn't keep them; sort those last. */
+const REQUIRED = new Set(['ppg', 'pts', 'gp']);
+const nullsLast = (o: Record<string, 'asc' | 'desc' | undefined>) =>
+  Object.fromEntries(
+    Object.entries(o).map(([k, dir]) => [k, REQUIRED.has(k) ? dir : { sort: dir!, nulls: 'last' as const }]),
+  );
+
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const { limit, offset } = page(sp, 100, 1000);
@@ -23,9 +30,12 @@ export async function GET(req: NextRequest) {
 
   const where: Prisma.PlayerStatsWhereInput = {
     ...(season ? { season: { key: season } } : {}),
-    ...(sp.get('team') ? { player: { team: { abbreviation: sp.get('team')!.toUpperCase() } } } : {}),
-    ...(sp.get('position') ? { player: { position: { contains: sp.get('position')! } } } : {}),
-    ...(sp.get('q') ? { player: { fullName: { contains: sp.get('q')!, mode: 'insensitive' } } } : {}),
+    // The team he played for that season, not the one he's on now.
+    ...(sp.get('team') ? { team: { abbreviation: sp.get('team')!.toUpperCase() } } : {}),
+    player: {
+      ...(sp.get('position') ? { position: { contains: sp.get('position')! } } : {}),
+      ...(sp.get('q') ? { fullName: { contains: sp.get('q')!, mode: 'insensitive' as const } } : {}),
+    },
     gp: { gte: Number(sp.get('minGp')) || 1 },
     min: { gte: Number(sp.get('minMin')) || 0 },
   };
@@ -34,10 +44,10 @@ export async function GET(req: NextRequest) {
     where,
     include: {
       season: { select: { key: true } },
+      team: { select: { abbreviation: true } },
       player: {
         select: {
           id: true, fullName: true, position: true,
-          team: { select: { abbreviation: true } },
           advancedStats: { select: {
             seasonId: true, per: true, ortg: true, drtg: true, netRtg: true,
             ws: true, ws48: true, obpm: true, dbpm: true, bpm: true, vorp: true,
@@ -48,7 +58,7 @@ export async function GET(req: NextRequest) {
     },
     // Advanced columns live on another table; sort those in memory over the
     // filtered set, which stays small because minGp/season narrow it first.
-    orderBy: isAdvSort ? { min: 'desc' } : sortBy(sp, BOX_SORTS, 'ppg'),
+    orderBy: isAdvSort ? { gp: 'desc' } : nullsLast(sortBy(sp, BOX_SORTS, 'ppg')),
     take: isAdvSort ? 1000 : limit,
     skip: isAdvSort ? 0 : offset,
   });
@@ -58,25 +68,26 @@ export async function GET(req: NextRequest) {
     return {
       playerId: r.player.id,
       player: r.player.fullName,
-      team: r.player.team?.abbreviation ?? '',
+      team: r.team?.abbreviation ?? '',
       pos: r.player.position ?? '',
       season: r.season.key,
-      gp: r.gp, min: Number(r.min.toFixed(1)),
+      gp: r.gp, min: r.min,
       ppg: r.ppg, rpg: r.rpg, apg: r.apg,
       pts: r.pts, reb: r.reb, ast: r.ast, stl: r.stl, blk: r.blk, tov: r.tov,
       fgPct: r.fgPct, fg3Pct: r.fg3Pct, ftPct: r.ftPct,
       tsPct: r.tsPct, efgPct: r.efgPct, usgPct: r.usgPct,
-      per: a?.per ?? 0, ortg: a?.ortg ?? 0, drtg: a?.drtg ?? 0, netRtg: a?.netRtg ?? 0,
-      ws: a?.ws ?? 0, ws48: a?.ws48 ?? 0,
-      obpm: a?.obpm ?? 0, dbpm: a?.dbpm ?? 0, bpm: a?.bpm ?? 0, vorp: a?.vorp ?? 0,
-      astPct: a?.astPct ?? 0, rebPct: a?.rebPct ?? 0, tovPct: a?.tovPct ?? 0,
+      per: a?.per ?? null, ortg: a?.ortg ?? null, drtg: a?.drtg ?? null, netRtg: a?.netRtg ?? null,
+      ws: a?.ws ?? null, ws48: a?.ws48 ?? null,
+      obpm: a?.obpm ?? null, dbpm: a?.dbpm ?? null, bpm: a?.bpm ?? null, vorp: a?.vorp ?? null,
+      astPct: a?.astPct ?? null, rebPct: a?.rebPct ?? null, tovPct: a?.tovPct ?? null,
     };
   });
 
   if (isAdvSort) {
     const dir = sp.get('dir') === 'asc' ? 1 : -1;
     const k = sortKey as (typeof ADV_SORTS)[number];
-    out.sort((a, b) => (a[k] - b[k]) * dir);
+    // Stats the league didn't keep that season sort last either way.
+    out.sort((a, b) => (a[k] === null ? 1 : b[k] === null ? -1 : (a[k]! - b[k]!) * dir));
     out = out.slice(offset, offset + limit);
   }
 

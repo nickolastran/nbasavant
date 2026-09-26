@@ -7,7 +7,7 @@ const CATEGORIES = {
   tsPct: 'True Shooting %', usgPct: 'Usage %', efgPct: 'Effective FG%',
 } as const;
 
-/** GET /api/leaders?season=2024-25&minGp=15&limit=5 — dashboard top performers. */
+/** GET /api/leaders?season=2025-26&minGp=15&limit=5 — dashboard top performers. */
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const season = sp.get('season');
@@ -26,16 +26,17 @@ export async function GET(req: NextRequest) {
             // Rate-stat leaderboards need a volume floor or bench players win them.
             ...(key === 'tsPct' || key === 'efgPct' ? { fga: { gte: 150 } } : {}),
           },
-          orderBy: { [key]: 'desc' },
+          orderBy: key === 'ppg' ? { ppg: 'desc' } : { [key]: { sort: 'desc', nulls: 'last' } },
           take: limit,
           include: {
-            player: { select: { id: true, fullName: true, team: { select: { abbreviation: true } } } },
+            team: { select: { abbreviation: true } },
+            player: { select: { id: true, fullName: true } },
           },
         })
       ).map((r) => ({
         playerId: r.player.id,
         player: r.player.fullName,
-        team: r.player.team?.abbreviation ?? '',
+        team: r.team?.abbreviation ?? '',
         value: r[key],
       })),
     })),

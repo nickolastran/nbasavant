@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const rows = await prisma.teamStats.findMany({
     where: {
       ...(season ? { season: { key: season } } : {}),
-      ...(conference ? { team: { conference } } : {}),
+      ...(conference ? { conference } : {}),
     },
     // At most 30 rows per season, so sort in memory and page after — sorting
     // before paging is the only way `sort` means anything.
@@ -29,10 +29,10 @@ export async function GET(req: NextRequest) {
     .map((r) => ({
       teamId: r.teamId,
       team: r.team.abbreviation,
-      name: `${r.team.city} ${r.team.name}`,
       color: r.team.primaryColor,
-      conference: r.team.conference,
-      division: r.team.division,
+      name: r.name ?? `${r.team.city} ${r.team.name}`,
+      conference: r.conference,
+      division: r.division,
       season: r.season.key,
       gp: r.gp, wins: r.wins, losses: r.losses,
       pace: r.pace, ortg: r.ortg, drtg: r.drtg, netRtg: r.netRtg,
@@ -43,7 +43,9 @@ export async function GET(req: NextRequest) {
       drtgByPosition: r.drtgByPosition,
     }))
     // drtg is a "lower is better" stat: descending should mean best defense first.
-    .sort((a, b) => (a[sortKey] - b[sortKey]) * (sortKey === 'drtg' ? -dir : dir))
+    .sort((a, b) =>
+      a[sortKey] === null ? 1 : b[sortKey] === null ? -1 : (a[sortKey]! - b[sortKey]!) * (sortKey === 'drtg' ? -dir : dir),
+    )
     .slice(offset, offset + limit);
 
   return respond(out, sp, `teams-${season ?? 'all'}`);

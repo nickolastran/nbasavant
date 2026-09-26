@@ -6,6 +6,7 @@ import { ShotChart, type Shot } from '@/components/ShotChart';
 import { TrendChart } from '@/components/TrendChart';
 import { FilterBar } from '@/components/FilterBar';
 import { seasonOptions } from '@/lib/options';
+import { fmt, perGame } from '@/lib/format';
 
 export const metadata = { title: 'Compare Players' };
 export const revalidate = 60;
@@ -88,13 +89,13 @@ export default async function ComparePage({
       teamColor: p.team?.primaryColor ?? 'var(--chrome)',
       pos: p.position ?? '',
       values: {
-        gp: s?.gp ?? 0, mpg: s && s.gp ? s.min / s.gp : 0,
-        ppg: s?.ppg ?? 0, rpg: s?.rpg ?? 0, apg: s?.apg ?? 0,
-        fgPct: s?.fgPct ?? 0, fg3Pct: s?.fg3Pct ?? 0, ftPct: s?.ftPct ?? 0,
-        tsPct: s?.tsPct ?? 0, usgPct: s?.usgPct ?? 0,
-        per: a?.per ?? 0, ortg: a?.ortg ?? 0, drtg: a?.drtg ?? 0,
-        ws: a?.ws ?? 0, bpm: a?.bpm ?? 0, vorp: a?.vorp ?? 0,
-      } as Record<string, number>,
+        gp: s?.gp ?? null, mpg: s ? perGame(s.min, s.gp) : null,
+        ppg: s?.ppg ?? null, rpg: s?.rpg ?? null, apg: s?.apg ?? null,
+        fgPct: s?.fgPct ?? null, fg3Pct: s?.fg3Pct ?? null, ftPct: s?.ftPct ?? null,
+        tsPct: s?.tsPct ?? null, usgPct: s?.usgPct ?? null,
+        per: a?.per ?? null, ortg: a?.ortg ?? null, drtg: a?.drtg ?? null,
+        ws: a?.ws ?? null, bpm: a?.bpm ?? null, vorp: a?.vorp ?? null,
+      } as Record<string, number | null>,
       seasons: p.stats.map((x) => ({ key: x.season.key, ppg: x.ppg, tsPct: x.tsPct })),
     };
   });
@@ -151,10 +152,12 @@ export default async function ComparePage({
               <tbody>
                 {ROWS.map((r) => {
                   const vals = cards.map((c) => c.values[r.key]);
-                  const best =
-                    'lowerIsBetter' in r && r.lowerIsBetter
-                      ? Math.min(...vals.filter((v) => v > 0))
-                      : Math.max(...vals);
+                  const known = vals.filter((v): v is number => v !== null);
+                  const best = !known.length
+                    ? null
+                    : 'lowerIsBetter' in r && r.lowerIsBetter
+                      ? Math.min(...known)
+                      : Math.max(...known);
                   return (
                     <tr key={r.key}>
                       <td style={{ textAlign: 'left' }}>{r.label}</td>
@@ -166,7 +169,7 @@ export default async function ComparePage({
                             color: vals[i] === best && cards.length > 1 ? 'var(--hot)' : undefined,
                           }}
                         >
-                          {c.values[r.key].toFixed(r.dp)}
+                          {fmt(c.values[r.key], r.dp)}
                         </td>
                       ))}
                     </tr>

@@ -46,8 +46,8 @@ export async function GET(req: NextRequest) {
           gp: r.gp, min: r.min, ppg: r.ppg, rpg: r.rpg, apg: r.apg,
           fgPct: r.fgPct, fg3Pct: r.fg3Pct, ftPct: r.ftPct,
           tsPct: r.tsPct, efgPct: r.efgPct, usgPct: r.usgPct,
-          per: a?.per ?? 0, ws: a?.ws ?? 0, bpm: a?.bpm ?? 0, vorp: a?.vorp ?? 0,
-          ortg: a?.ortg ?? 0, drtg: a?.drtg ?? 0,
+          per: a?.per ?? null, ws: a?.ws ?? null, bpm: a?.bpm ?? null, vorp: a?.vorp ?? null,
+          ortg: a?.ortg ?? null, drtg: a?.drtg ?? null,
         },
       };
     });
