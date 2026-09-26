@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { page, respond } from '@/lib/api';
 
-/** GET /api/games?season=2024-25&team=BOS&date=2025-01-15&before=&after= */
+/** GET /api/games?season=2026-27&team=BOS&date=2026-10-21&before=&after= */
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const { limit, offset } = page(sp, 25, 200);
@@ -62,8 +62,11 @@ export async function GET(req: NextRequest) {
   return respond(
     games.map((g) => ({
       id: g.id,
+      gameCode: g.gameCode,
       date: g.date.toISOString().slice(0, 10),
       status: g.status,
+      kind: g.kind,
+      label: g.label,
       home: g.homeTeam.abbreviation,
       away: g.awayTeam.abbreviation,
       homeName: `${g.homeTeam.city} ${g.homeTeam.name}`,

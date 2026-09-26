@@ -1,12 +1,11 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
-import { GameCard, type Game } from '@/components/ScoreboardBar';
+import { LiveCards } from '@/components/LiveCards';
+import type { Game } from '@/components/ScoreboardBar';
+import { shiftDay, todayEt } from '@/lib/dates';
 
 export const metadata = { title: 'Scores' };
 export const revalidate = 60;
-
-const iso = (d: Date) => d.toISOString().slice(0, 10);
-const shift = (day: string, n: number) => iso(new Date(Date.parse(day) + n * 864e5));
 
 const longDate = (day: string) =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', {
@@ -18,8 +17,9 @@ const longDate = (day: string) =>
   });
 
 /**
- * A full day's slate. Defaults to the most recent day that has games rather
- * than to today, so the page is never blank in the off-season.
+ * A full day's slate. Defaults to today (New York's today) when there are
+ * games, otherwise the next day that has some, otherwise the last one played.
+ * Today's cards follow the live feed; the rest come from the database.
  */
 export default async function ScoresPage({
   searchParams,
@@ -27,21 +27,26 @@ export default async function ScoresPage({
   searchParams: Promise<Record<string, string>>;
 }) {
   const sp = await searchParams;
+  const today = todayEt();
   const asked = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '') ? sp.date : null;
 
-  const fallback = await prisma.game.findFirst({
-    where: { date: { lte: new Date(`${iso(new Date())}T23:59:59Z`) } },
-    orderBy: { date: 'desc' },
-    select: { date: true },
-  });
-  const day = asked ?? (fallback ? iso(fallback.date) : iso(new Date()));
+  const nearest = asked
+    ? null
+    : (await prisma.game.findFirst({
+        where: { date: { gte: new Date(`${today}T00:00:00Z`) } },
+        orderBy: { date: 'asc' },
+        select: { date: true },
+      })) ??
+      (await prisma.game.findFirst({ orderBy: { date: 'desc' }, select: { date: true } }));
+  const day = asked ?? (nearest ? nearest.date.toISOString().slice(0, 10) : today);
 
   const games = await prisma.game.findMany({
-    where: { date: { gte: new Date(day), lt: new Date(Date.parse(day) + 864e5) } },
+    where: { date: { gte: new Date(`${day}T00:00:00Z`), lt: new Date(`${shiftDay(day, 1)}T00:00:00Z`) } },
     include: { homeTeam: true, awayTeam: true },
     orderBy: { id: 'asc' },
   });
 
+  // Season-to-date records; the live feed replaces them with today's for today's games.
   const records = new Map<number, string>(
     games.length
       ? (
@@ -55,8 +60,11 @@ export default async function ScoresPage({
 
   const cards: Game[] = games.map((g) => ({
     id: g.id,
+    gameCode: g.gameCode,
     date: day,
     status: g.status,
+    kind: g.kind,
+    label: g.label,
     home: g.homeTeam.abbreviation,
     away: g.awayTeam.abbreviation,
     homeName: `${g.homeTeam.city} ${g.homeTeam.name}`,
@@ -73,13 +81,19 @@ export default async function ScoresPage({
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold tracking-tight">{longDate(day)}</h1>
+        {day === today && <span className="eyebrow" style={{ color: 'var(--accent)' }}>Today</span>}
         <div className="flex gap-2">
-          <Link href={`/scores?date=${shift(day, -1)}`} className="btn-ghost no-underline">
+          <Link href={`/scores?date=${shiftDay(day, -1)}`} className="btn-ghost no-underline">
             ‹ Prev day
           </Link>
-          <Link href={`/scores?date=${shift(day, 1)}`} className="btn-ghost no-underline">
+          <Link href={`/scores?date=${shiftDay(day, 1)}`} className="btn-ghost no-underline">
             Next day ›
           </Link>
+          {day !== today && (
+            <Link href={`/scores?date=${today}`} className="btn-ghost no-underline">
+              Today
+            </Link>
+          )}
         </div>
         <Link href="/schedule" className="link ml-auto text-sm">
           Full schedule
@@ -87,11 +101,7 @@ export default async function ScoresPage({
       </div>
 
       {cards.length ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {cards.map((g) => (
-            <GameCard key={g.id} g={g} />
-          ))}
-        </div>
+        <LiveCards games={cards} date={day} />
       ) : (
         <p className="panel p-6 text-sm" style={{ color: 'var(--ink-2)' }}>
           No games on {longDate(day)}.

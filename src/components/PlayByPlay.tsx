@@ -12,7 +12,13 @@ export type Play = {
   teamAbbr: string;
 };
 
-const TYPES = ['SHOT', 'REBOUND', 'TURNOVER', 'FOUL', 'BLOCK', 'STEAL', 'MISS', 'SUBSTITUTION'];
+const TYPES = [
+  'SHOT', 'MISS', 'FREE THROW', 'REBOUND', 'TURNOVER', 'STEAL', 'BLOCK', 'FOUL', 'VIOLATION',
+  'SUBSTITUTION', 'TIMEOUT', 'JUMPBALL',
+];
+
+/** Q1-Q4, then OT, 2OT... */
+const periodLabel = (p: number) => (p <= 4 ? `Q${p}` : p === 5 ? 'OT' : `${p - 4}OT`);
 
 export function PlayByPlay({ plays }: { plays: Play[] }) {
   const [period, setPeriod] = useState(0);
@@ -30,7 +36,7 @@ export function PlayByPlay({ plays }: { plays: Play[] }) {
     [plays, period, type, q],
   );
 
-  const periods = [...new Set(plays.map((p) => p.period))].sort();
+  const periods = [...new Set(plays.map((p) => p.period))].sort((a, b) => a - b);
 
   return (
     <section className="panel flex max-h-[720px] flex-col overflow-hidden">
@@ -41,7 +47,7 @@ export function PlayByPlay({ plays }: { plays: Play[] }) {
             <option value={0}>All periods</option>
             {periods.map((p) => (
               <option key={p} value={p}>
-                Q{p}
+                {periodLabel(p)}
               </option>
             ))}
           </select>
@@ -72,7 +78,7 @@ export function PlayByPlay({ plays }: { plays: Play[] }) {
             style={{ borderColor: 'var(--line)' }}
           >
             <span className="eyebrow w-14 shrink-0 tnum">
-              Q{p.period} {p.clock}
+              {periodLabel(p.period)} {p.clock}
             </span>
             <span
               className="w-9 shrink-0 text-[0.6875rem] font-semibold"
