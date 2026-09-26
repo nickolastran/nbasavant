@@ -12,7 +12,8 @@
     "db:seed": "tsx scripts/ingest.ts --from 2026 --to 2026",
     "db:studio": "prisma studio",
     "ingest": "tsx scripts/ingest.ts",
-    "test": "tsx src/lib/stats.test.ts"
+    "test": "tsx src/lib/stats.test.ts && tsx src/lib/sync.test.ts",
+    "sync": "tsx scripts/sync.ts"
   },
   "prisma": {
     "seed": "tsx scripts/ingest.ts --from 2026 --to 2026"
