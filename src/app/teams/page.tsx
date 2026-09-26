@@ -1,34 +1,22 @@
 import Link from 'next/link';
-import { prisma, getSeason } from '@/lib/db';
+import { byRecord, latestSeason, seasonStandings } from '@/lib/db';
 import { TeamMark } from '@/components/TeamMark';
 
 export const metadata = { title: 'Teams' };
 export const revalidate = 300;
 
-/** All 30 franchises by conference and division, each with this season's record. */
+/** Every franchise playing this season, by conference and division, with its record. */
 export default async function TeamsPage() {
-  const season = await getSeason();
-  const [teams, stats] = await Promise.all([
-    prisma.team.findMany({ orderBy: [{ conference: 'asc' }, { division: 'asc' }, { city: 'asc' }] }),
-    season
-      ? prisma.teamStats.findMany({
-          where: { seasonId: season.id },
-          select: { teamId: true, wins: true, losses: true, netRtg: true },
-        })
-      : [],
-  ]);
-
-  const record = new Map(stats.map((s) => [s.teamId, s]));
-  // Only franchises with a row for the current season are active ones.
-  const current = teams.filter((t) => record.has(t.id));
+  const season = await latestSeason();
+  const rows = season ? (await seasonStandings(season.id)).sort(byRecord) : [];
 
   const byConf = ['East', 'West'].map((conference) => ({
     conference,
-    divisions: [...new Set(current.filter((t) => t.conference === conference).map((t) => t.division))]
+    divisions: [...new Set(rows.filter((r) => r.conference === conference).map((r) => r.division ?? ''))]
       .sort()
       .map((division) => ({
         division,
-        teams: current.filter((t) => t.conference === conference && t.division === division),
+        teams: rows.filter((r) => r.conference === conference && (r.division ?? '') === division),
       })),
   }));
 
@@ -36,8 +24,8 @@ export default async function TeamsPage() {
     <div>
       <h1 className="mb-1 text-xl font-bold tracking-tight">Teams</h1>
       <p className="mb-5 text-sm" style={{ color: 'var(--ink-2)' }}>
-        {current.length} franchises, {season?.key ?? 'current'} records. Open one for its full
-        analytics profile.
+        {rows.length} franchises, {season?.key} records. Open one for its roster, leaders, schedule and every
+        season it has played.
       </p>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -54,33 +42,30 @@ export default async function TeamsPage() {
                     {d.division}
                   </h3>
                   <ul>
-                    {d.teams.map((t) => {
-                      const r = record.get(t.id);
-                      return (
-                        <li key={t.id}>
-                          <Link
-                            href={`/team-stats?team=${t.abbreviation}`}
-                            className="flex items-center gap-3 border-b px-3 py-2 no-underline transition-colors last:border-b-0 hover:bg-[var(--panel-2)]"
-                            style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
+                    {d.teams.map((t) => (
+                      <li key={t.teamId}>
+                        <Link
+                          href={`/teams/${t.abbr}`}
+                          className="flex items-center gap-3 border-b px-3 py-2 no-underline transition-colors last:border-b-0 hover:bg-[var(--panel-2)]"
+                          style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}
+                        >
+                          <TeamMark abbr={t.abbr} color={t.color} size={26} />
+                          <span className="text-sm font-semibold">{t.abbr}</span>
+                          <span className="flex-1 text-sm" style={{ color: 'var(--ink-2)' }}>
+                            {t.name}
+                          </span>
+                          <span className="tnum text-sm">
+                            {t.wins}-{t.losses}
+                          </span>
+                          <span
+                            className="tnum w-12 text-right text-[0.75rem]"
+                            style={{ color: (t.netRtg ?? 0) >= 0 ? 'var(--hot)' : 'var(--cold)' }}
                           >
-                            <TeamMark abbr={t.abbreviation} color={t.primaryColor} size={26} />
-                            <span className="text-sm font-semibold">{t.abbreviation}</span>
-                            <span className="flex-1 text-sm" style={{ color: 'var(--ink-2)' }}>
-                              {t.city} {t.name}
-                            </span>
-                            <span className="tnum text-sm">
-                              {r ? `${r.wins}-${r.losses}` : '—'}
-                            </span>
-                            <span
-                              className="tnum w-12 text-right text-[0.75rem]"
-                              style={{ color: (r?.netRtg ?? 0) >= 0 ? 'var(--hot)' : 'var(--cold)' }}
-                            >
-                              {r ? `${r.netRtg > 0 ? '+' : ''}${r.netRtg.toFixed(1)}` : ''}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
+                            {t.netRtg === null ? '' : `${t.netRtg > 0 ? '+' : ''}${t.netRtg.toFixed(1)}`}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               ))}
