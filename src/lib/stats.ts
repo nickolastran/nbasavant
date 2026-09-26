@@ -279,3 +279,163 @@ export const gamesBehind = (
   lead: { wins: number; losses: number },
   team: { wins: number; losses: number },
 ) => (lead.wins - team.wins + (team.losses - lead.losses)) / 2;
+
+
+/**
+ * Expected wins from points scored and allowed. Exponent 14 is the one
+ * basketball-reference publishes its Pythagorean W-L with.
+ */
+export const pythagWins = (pf: number, pa: number, gp: number) =>
+  pf + pa > 0 ? (gp * pf ** 14) / (pf ** 14 + pa ** 14) : 0;
+
+export type GameResult = {
+  /** ISO date; sorts chronologically as a string. */
+  date: string;
+  home: number;
+  away: number;
+  homeScore: number;
+  awayScore: number;
+};
+/** Where a team sat that season. Before 1970-71 there were no conferences. */
+export type Alignment = { conference: string | null; division: string | null };
+type WL = [wins: number, losses: number];
+
+export type StandingRow = {
+  teamId: number;
+  wins: number; losses: number;
+  home: WL; away: WL; conf: WL; div: WL; l10: WL;
+  pf: number; pa: number;
+  /** "W3", "L1", or '' before a team has played. */
+  streak: string;
+};
+
+/**
+ * Every split a standings page shows, from final scores alone. Takes regular
+ * season finals only; teams in `alignment` with no games come back 0-0.
+ */
+export function standings(games: GameResult[], alignment: Map<number, Alignment>): StandingRow[] {
+  const rows = new Map<number, StandingRow & { results: boolean[] }>();
+  for (const teamId of alignment.keys()) {
+    rows.set(teamId, {
+      teamId, wins: 0, losses: 0, home: [0, 0], away: [0, 0], conf: [0, 0], div: [0, 0],
+      l10: [0, 0], pf: 0, pa: 0, streak: '', results: [],
+    });
+  }
+  const same = (a: string | null | undefined, b: string | null | undefined) => !!a && a === b;
+  const tally = (split: WL, won: boolean) => { split[won ? 0 : 1]++; };
+
+  for (const g of [...games].sort((a, b) => a.date.localeCompare(b.date))) {
+    const [h, a] = [alignment.get(g.home), alignment.get(g.away)];
+    for (const [id, scored, allowed, where] of [
+      [g.home, g.homeScore, g.awayScore, 'home'],
+      [g.away, g.awayScore, g.homeScore, 'away'],
+    ] as const) {
+      const r = rows.get(id);
+      if (!r) continue;
+      const won = scored > allowed;
+      r[won ? 'wins' : 'losses']++;
+      r.pf += scored;
+      r.pa += allowed;
+      tally(r[where], won);
+      if (same(h?.conference, a?.conference)) tally(r.conf, won);
+      if (same(h?.division, a?.division)) tally(r.div, won);
+      r.results.push(won);
+    }
+  }
+
+  return [...rows.values()].map(({ results, ...r }) => {
+    const last = results.at(-1);
+    let n = 0;
+    while (n < results.length && results[results.length - 1 - n] === last) n++;
+    const recent = results.slice(-10);
+    return {
+      ...r,
+      streak: results.length ? `${last ? 'W' : 'L'}${n}` : '',
+      l10: [recent.filter(Boolean).length, recent.filter((w) => !w).length],
+    };
+  });
+}
+
+// --- Careers --------------------------------------------------------------
+
+/** One season's counting line. `null` means the league didn't record it yet. */
+export type SeasonLine = {
+  gp: number; gs: number | null; min: number | null;
+  pts: number; reb: number | null; oreb: number | null; dreb: number | null;
+  ast: number | null; stl: number | null; blk: number | null; tov: number | null;
+  pf: number | null; fgm: number; fga: number; fg3m: number | null; fg3a: number | null;
+  ftm: number; fta: number;
+};
+/** A career total plus the games it covers, so per-game rates divide honestly. */
+export type Tally = { total: number | null; gp: number; partial: boolean };
+type Counting = Exclude<keyof SeasonLine, 'gp'>;
+
+export function careerTotals(lines: SeasonLine[]) {
+  const gp = lines.reduce((s, l) => s + l.gp, 0);
+  const tally = (k: Counting): Tally => {
+    const kept = lines.filter((l) => l[k] !== null);
+    return {
+      total: kept.length ? kept.reduce((s, l) => s + (l[k] as number), 0) : null,
+      gp: kept.reduce((s, l) => s + l.gp, 0),
+      partial: kept.length > 0 && kept.length < lines.length,
+    };
+  };
+  const keys: Counting[] = [
+    'gs', 'min', 'pts', 'reb', 'oreb', 'dreb', 'ast', 'stl', 'blk', 'tov', 'pf',
+    'fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta',
+  ];
+  const t = Object.fromEntries(keys.map((k) => [k, tally(k)])) as Record<Counting, Tally>;
+  const ratio = (a: number | null, b: number | null) => (a !== null && b ? (a / b) * 100 : null);
+  const [pts, fga, fta, fgm] = [t.pts.total!, t.fga.total!, t.fta.total!, t.fgm.total!];
+  return {
+    gp,
+    ...t,
+    fgPct: ratio(fgm, fga),
+    fg3Pct: ratio(t.fg3m.total, t.fg3a.total),
+    ftPct: ratio(t.ftm.total, fta),
+    tsPct: fga + fta ? tsPct({ pts, fga, fta }) : null,
+    // No three-point line before 1979-80, so a missing 3PM is zero threes.
+    efgPct: fga ? efgPct({ fgm, fg3m: t.fg3m.total ?? 0, fga }) : null,
+  };
+}
+
+type AdvancedLine = {
+  min: number | null; per: number | null; ws: number | null; ows: number | null;
+  dws: number | null; bpm: number | null; vorp: number | null;
+};
+
+/** Sums what accumulates (WS, VORP); weights rates (PER, BPM) by minutes. */
+export function careerAdvanced(lines: AdvancedLine[]) {
+  const sum = (k: keyof AdvancedLine) => {
+    const kept = lines.filter((l) => l[k] !== null);
+    return kept.length ? kept.reduce((s, l) => s + (l[k] as number), 0) : null;
+  };
+  const weighted = (k: 'per' | 'bpm') => {
+    const kept = lines.filter((l) => l[k] !== null && l.min);
+    const mins = kept.reduce((s, l) => s + l.min!, 0);
+    return mins ? kept.reduce((s, l) => s + l[k]! * l.min!, 0) / mins : null;
+  };
+  const withWs = lines.filter((l) => l.ws !== null && l.min);
+  const wsMin = withWs.reduce((s, l) => s + l.min!, 0);
+  return {
+    per: weighted('per'),
+    bpm: weighted('bpm'),
+    ws: sum('ws'), ows: sum('ows'), dws: sum('dws'), vorp: sum('vorp'),
+    ws48: wsMin ? (withWs.reduce((s, l) => s + l.ws!, 0) * 48) / wsMin : null,
+  };
+}
+
+// --- Qualifying and ranking ---------------------------------------------------
+
+/** The NBA's leaderboard rule: 70% of team games, rounded up. Integer math on purpose. */
+export const minGames = (teamGames: number) => Math.ceil((teamGames * 7) / 10);
+
+/** An 82-game attempt floor, prorated to the games played so far. */
+export const scaledFloor = (floor: number, teamGames: number) => Math.ceil((floor * teamGames) / 82);
+
+/** Share of the field below `value`, 0-100. Same definition the tables shade by. */
+export function percentileOf(value: number, field: number[], lowerIsBetter = false) {
+  if (field.length < 2) return 50;
+  const p = (field.filter((v) => v < value).length / (field.length - 1)) * 100;
+  return Math.round(lowerIsBetter ? 100 - p : p);
+}
