@@ -221,3 +221,9 @@ a:focus-visible {
   border-color: var(--ink);
   color: #fff;
 }
+
+/* The postseason line in a standings table: below the last playoff seed and
+   below the last play-in seed. */
+.stat-table tbody tr.cutline td {
+  border-bottom: 2px solid var(--line-2);
+}

@@ -45,6 +45,9 @@ export function StatTable<T extends Record<string, any>>({
   const sorted = useMemo(() => {
     const out = [...rows].sort((a, b) => {
       const [x, y] = [a[sort], b[sort]];
+      // A stat the league didn't keep that season sorts last either way.
+      if (x === null || x === undefined) return y === null || y === undefined ? 0 : 1;
+      if (y === null || y === undefined) return -1;
       if (typeof x === 'number' && typeof y === 'number') return dir === 'asc' ? x - y : y - x;
       return dir === 'asc'
         ? String(x).localeCompare(String(y))
@@ -58,7 +61,11 @@ export function StatTable<T extends Record<string, any>>({
   const ranks = useMemo(() => {
     const out: Record<string, Map<number, number>> = {};
     for (const c of cols.filter((c) => c.shade)) {
-      const vals = rows.map((r) => Number(r[c.key])).filter(Number.isFinite).sort((a, b) => a - b);
+      // Only real numbers rank: Number(null) is 0, which would shade a blank cell.
+      const vals = rows
+        .map((r): unknown => r[c.key])
+        .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+        .sort((a, b) => a - b);
       const m = new Map<number, number>();
       for (const v of new Set(vals)) {
         const below = vals.filter((x) => x < v).length;
@@ -126,14 +133,20 @@ export function StatTable<T extends Record<string, any>>({
               <tr key={i}>
                 {cols.map((c, j) => {
                   const raw = row[c.key];
-                  const text =
-                    c.dp !== undefined && Number.isFinite(Number(raw))
+                  const missing = raw === null || raw === undefined;
+                  const text = missing
+                    ? '—'
+                    : c.dp !== undefined && Number.isFinite(Number(raw))
                       ? Number(raw).toFixed(c.dp) + (c.suffix ?? '')
-                      : `${raw ?? ''}${c.suffix ?? ''}`;
+                      : `${raw}${c.suffix ?? ''}`;
                   return (
                     <td
                       key={c.key}
-                      style={c.shade ? { background: shadeOf(c, Number(raw)) } : undefined}
+                      style={
+                        missing
+                          ? { color: 'var(--ink-3)' }
+                          : c.shade ? { background: shadeOf(c, Number(raw)) } : undefined
+                      }
                     >
                       {j === 0 && href ? (
                         <Link href={`${href.base}/${row[href.key]}`} className="link font-medium">

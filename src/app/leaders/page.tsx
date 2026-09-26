@@ -1,23 +1,60 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { prisma, getSeason } from '@/lib/db';
+import { getSeason, prisma } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
+import { TeamMark } from '@/components/TeamMark';
+import { ViewTabs } from '@/components/ViewTabs';
+import { fmt, perGame } from '@/lib/format';
 import { seasonOptions } from '@/lib/options';
+import { minGames, scaledFloor } from '@/lib/stats';
 
 export const metadata = { title: 'Stat Leaders' };
 export const revalidate = 60;
 
-/** `minFga` keeps bench players with four efficient shots off the rate boards. */
-const BOARDS = [
-  { key: 'ppg', label: 'Points', unit: '' },
-  { key: 'rpg', label: 'Rebounds', unit: '' },
-  { key: 'apg', label: 'Assists', unit: '' },
-  { key: 'tsPct', label: 'True Shooting', unit: '%', minFga: 300 },
-  { key: 'efgPct', label: 'Effective FG', unit: '%', minFga: 300 },
-  { key: 'fg3Pct', label: 'Three-Point', unit: '%', minFg3a: 100 },
-  { key: 'ftPct', label: 'Free Throw', unit: '%', minFta: 100 },
-  { key: 'usgPct', label: 'Usage', unit: '%' },
-] as const;
+type Line = {
+  playerId: number; name: string; abbr: string; color: string; teamId: number | null; gp: number;
+  fga: number; fg3a: number | null; fta: number;
+  ppg: number | null; rpg: number | null; apg: number | null; spg: number | null; bpg: number | null;
+  tpm: number | null; fgPct: number | null; fg3Pct: number | null; ftPct: number | null;
+  tsPct: number | null; efgPct: number | null; usgPct: number | null;
+  per: number | null; ws: number | null; bpm: number | null; vorp: number | null;
+};
+type Stat = Exclude<keyof Line, 'playerId' | 'name' | 'abbr' | 'color' | 'teamId' | 'gp' | 'fga' | 'fg3a' | 'fta'>;
+
+/**
+ * Each board, and what it takes to be on it. Per-game and rate boards need
+ * 70% of team games; rate boards also an attempt floor (the 82-game number,
+ * prorated). Season totals (WS, VORP) rank everyone.
+ */
+const BOARDS: { key: Stat; label: string; unit?: string; total?: boolean; floor?: ['fga' | 'fg3a' | 'fta', number] }[] = [
+  { key: 'ppg', label: 'Points' },
+  { key: 'rpg', label: 'Rebounds' },
+  { key: 'apg', label: 'Assists' },
+  { key: 'spg', label: 'Steals' },
+  { key: 'bpg', label: 'Blocks' },
+  { key: 'tpm', label: 'Threes made' },
+  { key: 'fgPct', label: 'Field goal %', unit: '%', floor: ['fga', 300] },
+  { key: 'fg3Pct', label: 'Three-point %', unit: '%', floor: ['fg3a', 100] },
+  { key: 'ftPct', label: 'Free throw %', unit: '%', floor: ['fta', 100] },
+  { key: 'tsPct', label: 'True shooting %', unit: '%', floor: ['fga', 300] },
+  { key: 'efgPct', label: 'Effective FG %', unit: '%', floor: ['fga', 300] },
+  { key: 'usgPct', label: 'Usage %', unit: '%' },
+  { key: 'per', label: 'PER' },
+  { key: 'bpm', label: 'Box plus/minus' },
+  { key: 'ws', label: 'Win shares', total: true },
+  { key: 'vorp', label: 'VORP', total: true },
+];
+
+const TEAM_CATS: { key: Stat; label: string }[] = [
+  { key: 'ppg', label: 'PTS' }, { key: 'rpg', label: 'REB' }, { key: 'apg', label: 'AST' },
+  { key: 'spg', label: 'STL' }, { key: 'bpg', label: 'BLK' }, { key: 'tpm', label: '3PM' },
+  { key: 'per', label: 'PER' },
+];
+
+const VIEWS = [
+  { value: 'players', label: 'Players' },
+  { value: 'teams', label: 'Team Leaders' },
+];
 
 export default async function LeadersPage({
   searchParams,
@@ -25,83 +62,168 @@ export default async function LeadersPage({
   searchParams: Promise<Record<string, string>>;
 }) {
   const sp = await searchParams;
-  const active = await getSeason();
-  const seasonKey = sp.season || active?.key;
-  const seasons = await prisma.season.findMany({ orderBy: { startYear: 'desc' } });
-  const minGp = Number(sp.minGp) || 20;
+  const [seasons, active] = await Promise.all([
+    prisma.season.findMany({ where: { active: true }, orderBy: { startYear: 'desc' } }),
+    getSeason(),
+  ]);
+  const season = seasons.find((s) => s.key === sp.season) ?? active;
+  const view = sp.view === 'teams' ? 'teams' : 'players';
 
-  const boards = await Promise.all(
-    BOARDS.map(async (b) => ({
-      ...b,
-      rows: await prisma.playerStats.findMany({
-        where: {
-          season: { key: seasonKey },
-          gp: { gte: minGp },
-          ...('minFga' in b ? { fga: { gte: b.minFga } } : {}),
-          ...('minFg3a' in b ? { fg3a: { gte: b.minFg3a } } : {}),
-          ...('minFta' in b ? { fta: { gte: b.minFta } } : {}),
-        },
-        orderBy: { [b.key]: 'desc' },
-        take: 10,
-        include: {
-          player: {
-            select: { id: true, fullName: true, team: { select: { abbreviation: true } } },
+  const [stats, teamStats] = season
+    ? await Promise.all([
+        prisma.playerStats.findMany({
+          where: { seasonId: season.id },
+          include: {
+            player: { select: { fullName: true, advancedStats: { where: { seasonId: season.id } } } },
+            team: { select: { abbreviation: true, primaryColor: true } },
           },
-        },
-      }),
-    })),
-  );
+        }),
+        prisma.teamStats.findMany({ where: { seasonId: season.id }, include: { team: true } }),
+      ])
+    : [[], []];
+
+  const lines: Line[] = stats.map((s) => {
+    const a = s.player.advancedStats[0];
+    return {
+      playerId: s.playerId, name: s.player.fullName, teamId: s.teamId, gp: s.gp,
+      abbr: s.team?.abbreviation ?? '', color: s.team?.primaryColor ?? 'var(--mid)',
+      fga: s.fga, fg3a: s.fg3a, fta: s.fta,
+      ppg: s.ppg, rpg: s.rpg, apg: s.apg,
+      spg: perGame(s.stl, s.gp), bpg: perGame(s.blk, s.gp), tpm: perGame(s.fg3m, s.gp),
+      fgPct: s.fgPct, fg3Pct: s.fg3Pct, ftPct: s.ftPct, tsPct: s.tsPct, efgPct: s.efgPct, usgPct: s.usgPct,
+      per: a?.per ?? null, ws: a?.ws ?? null, bpm: a?.bpm ?? null, vorp: a?.vorp ?? null,
+    };
+  });
+
+  const teamGames = Math.max(0, ...teamStats.map((t) => t.gp), ...lines.map((l) => l.gp));
+  const minGp = Number(sp.minGp) || minGames(teamGames);
+  const rank = (pool: Line[], key: Stat) =>
+    pool.filter((l) => l[key] !== null).sort((a, b) => (b[key] as number) - (a[key] as number));
+
+  const boards = BOARDS.map((b) => ({
+    ...b,
+    tracked: lines.some((l) => l[b.key] !== null),
+    rows: rank(
+      lines.filter(
+        (l) =>
+          (b.total || l.gp >= minGp) &&
+          (!b.floor || (l[b.floor[0]] ?? 0) >= scaledFloor(b.floor[1], teamGames)),
+      ),
+      b.key,
+    ).slice(0, 10),
+  }));
+
+  // Each team's best qualified player per category; if nobody on a team
+  // qualifies yet, its best player regardless.
+  const teams = teamStats
+    .map((t) => {
+      const roster = lines.filter((l) => l.teamId === t.teamId);
+      const qualified = roster.filter((l) => l.gp >= minGames(t.gp));
+      const pool = qualified.length ? qualified : roster;
+      return { t, leaders: TEAM_CATS.map((c) => rank(pool, c.key)[0] ?? null) };
+    })
+    .sort((a, b) => (a.t.name ?? a.t.team.city).localeCompare(b.t.name ?? b.t.team.city));
 
   return (
     <div>
       <h1 className="mb-1 text-xl font-bold tracking-tight">Stat Leaders</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
-        {seasonKey}, minimum {minGp} games played. Rate boards carry their own volume floor.
+        {season?.key}. To qualify: {minGp} games ({teamGames ? '70% of team games so far' : 'no games yet'}); rate
+        boards also need their attempts, prorated to games played. Win shares and VORP are season totals and rank
+        everyone.
       </p>
 
       <Suspense>
         <FilterBar
           fields={[
-            { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
+            { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: season?.key },
             { kind: 'number', name: 'minGp', label: 'Min games', min: 1, max: 82, step: 1, defaultValue: String(minGp) },
           ]}
         />
       </Suspense>
+      <ViewTabs views={VIEWS} current={view} params={Object.fromEntries(Object.entries(sp).filter(([k]) => k !== 'view'))} />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {boards.map((b) => (
-          <section key={b.key} className="panel overflow-hidden">
-            <h2
-              className="border-b px-3 py-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em]"
-              style={{ borderColor: 'var(--line)' }}
-            >
-              {b.label}
-            </h2>
-            <ol className="p-1">
-              {b.rows.map((r, i) => (
-                <li key={r.id} className="flex items-baseline gap-2 px-2 py-1 text-sm">
-                  <span className="tnum w-4 text-right text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
-                    {i + 1}
+      {view === 'players' ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {boards.map((b) => (
+            <section key={b.key} className="panel overflow-hidden">
+              <h2
+                className="border-b px-3 py-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em]"
+                style={{ borderColor: 'var(--line)' }}
+              >
+                {b.label}
+                {!b.total && !b.unit && b.key !== 'per' && b.key !== 'bpm' && (
+                  <span className="ml-1 font-normal normal-case tracking-normal" style={{ color: 'var(--ink-3)' }}>
+                    per game
                   </span>
-                  <Link href={`/players/${r.player.id}`} className="link flex-1 truncate">
-                    {r.player.fullName}
-                  </Link>
-                  <span className="eyebrow">{r.player.team?.abbreviation ?? ''}</span>
-                  <span className="tnum w-12 text-right font-semibold">
-                    {(r[b.key] as number).toFixed(1)}
-                    {b.unit}
-                  </span>
-                </li>
+                )}
+              </h2>
+              <ol className="p-1">
+                {b.rows.map((r, i) => (
+                  <li key={r.playerId} className="flex items-baseline gap-2 px-2 py-1 text-sm">
+                    <span className="tnum w-4 text-right text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
+                      {i + 1}
+                    </span>
+                    <Link href={`/players/${r.playerId}`} className="link flex-1 truncate">
+                      {r.name}
+                    </Link>
+                    <span className="eyebrow">{r.abbr}</span>
+                    <span className="tnum w-12 text-right font-semibold">{fmt(r[b.key], 1, b.unit)}</span>
+                  </li>
+                ))}
+                {!b.rows.length && (
+                  <li className="px-2 py-3 text-sm" style={{ color: 'var(--ink-3)' }}>
+                    {b.tracked ? 'No qualifiers yet.' : `Not tracked in ${season?.key}.`}
+                  </li>
+                )}
+              </ol>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="panel overflow-x-auto">
+          <table className="stat-table">
+            <thead>
+              <tr>
+                <th style={{ cursor: 'default' }}>Team</th>
+                {TEAM_CATS.map((c) => (
+                  <th key={c.key} style={{ cursor: 'default', textAlign: 'left' }}>
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {teams.map(({ t, leaders }) => (
+                <tr key={t.teamId}>
+                  <td>
+                    <span className="flex items-center gap-2">
+                      <TeamMark abbr={t.team.abbreviation} color={t.team.primaryColor} size={18} />
+                      <Link href={`/teams/${t.team.abbreviation}?season=${season?.key}`} className="link font-medium">
+                        {t.name ?? `${t.team.city} ${t.team.name}`}
+                      </Link>
+                    </span>
+                  </td>
+                  {leaders.map((l, i) => (
+                    <td key={TEAM_CATS[i].key} style={{ textAlign: 'left' }}>
+                      {l ? (
+                        <>
+                          <Link href={`/players/${l.playerId}`} className="link">
+                            {l.name}
+                          </Link>{' '}
+                          <span className="tnum font-semibold">{fmt(l[TEAM_CATS[i].key])}</span>
+                        </>
+                      ) : (
+                        <span style={{ color: 'var(--ink-3)' }}>—</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
               ))}
-              {!b.rows.length && (
-                <li className="px-2 py-3 text-sm" style={{ color: 'var(--ink-3)' }}>
-                  No qualifiers.
-                </li>
-              )}
-            </ol>
-          </section>
-        ))}
-      </div>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
