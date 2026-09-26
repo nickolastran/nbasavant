@@ -1,4 +1,4 @@
-/** Real NBA team metadata, covering every franchise that played 2000-01 onward. */
+/** Real NBA team metadata: every franchise that has played since the BAA tipped off in 1946-47. */
 export const TEAMS = [
   { id: 1610612737, abbreviation: 'ATL', city: 'Atlanta', name: 'Hawks', conference: 'East', division: 'Southeast', primaryColor: '#e03a3e' },
   { id: 1610612738, abbreviation: 'BOS', city: 'Boston', name: 'Celtics', conference: 'East', division: 'Atlantic', primaryColor: '#007a33' },
@@ -36,4 +36,41 @@ export const TEAMS = [
   { id: 1610612767, abbreviation: 'SEA', city: 'Seattle', name: 'SuperSonics', conference: 'West', division: 'Northwest', primaryColor: '#00653a' },
   { id: 1610612768, abbreviation: 'VAN', city: 'Vancouver', name: 'Grizzlies', conference: 'West', division: 'Midwest', primaryColor: '#00727a' },
   { id: 1610612769, abbreviation: 'NJN', city: 'New Jersey', name: 'Nets', conference: 'East', division: 'Atlantic', primaryColor: '#002a60' },
+  // Earlier relocations, back to 1946-47, keyed by basketball-reference's
+  // abbreviation. conference/division here are only a fallback: each season's
+  // real alignment is stored on TeamStats, straight from that year's standings.
+  { id: 1610612770, abbreviation: 'MNL', city: 'Minneapolis', name: 'Lakers', conference: 'West', division: 'Western', primaryColor: '#1d428a' },
+  { id: 1610612771, abbreviation: 'PHW', city: 'Philadelphia', name: 'Warriors', conference: 'East', division: 'Eastern', primaryColor: '#1d428a' },
+  { id: 1610612772, abbreviation: 'SFW', city: 'San Francisco', name: 'Warriors', conference: 'West', division: 'Western', primaryColor: '#1d428a' },
+  { id: 1610612773, abbreviation: 'TRI', city: 'Tri-Cities', name: 'Blackhawks', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612774, abbreviation: 'MLH', city: 'Milwaukee', name: 'Hawks', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612775, abbreviation: 'STL', city: 'St. Louis', name: 'Hawks', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612776, abbreviation: 'FTW', city: 'Fort Wayne', name: 'Pistons', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612777, abbreviation: 'ROC', city: 'Rochester', name: 'Royals', conference: 'West', division: 'Western', primaryColor: '#002d62' },
+  { id: 1610612778, abbreviation: 'CIN', city: 'Cincinnati', name: 'Royals', conference: 'East', division: 'Eastern', primaryColor: '#002d62' },
+  { id: 1610612779, abbreviation: 'KCK', city: 'Kansas City', name: 'Kings', conference: 'West', division: 'Midwest', primaryColor: '#c8102e' },
+  { id: 1610612780, abbreviation: 'SYR', city: 'Syracuse', name: 'Nationals', conference: 'East', division: 'Eastern', primaryColor: '#c8102e' },
+  { id: 1610612781, abbreviation: 'CHZ', city: 'Chicago', name: 'Zephyrs', conference: 'West', division: 'Western', primaryColor: '#006bb6' },
+  { id: 1610612782, abbreviation: 'BAL', city: 'Baltimore', name: 'Bullets', conference: 'East', division: 'Eastern', primaryColor: '#002b5c' },
+  { id: 1610612783, abbreviation: 'SDR', city: 'San Diego', name: 'Rockets', conference: 'West', division: 'Western', primaryColor: '#006bb6' },
+  { id: 1610612784, abbreviation: 'BUF', city: 'Buffalo', name: 'Braves', conference: 'East', division: 'Atlantic', primaryColor: '#006bb6' },
+  { id: 1610612785, abbreviation: 'SDC', city: 'San Diego', name: 'Clippers', conference: 'West', division: 'Pacific', primaryColor: '#006bb6' },
+  { id: 1610612786, abbreviation: 'NOJ', city: 'New Orleans', name: 'Jazz', conference: 'East', division: 'Central', primaryColor: '#5a2d81' },
+  { id: 1610612787, abbreviation: 'NYN', city: 'New York', name: 'Nets', conference: 'East', division: 'Atlantic', primaryColor: '#002a60' },
+  // Franchises that folded, most of them in the BAA's first four seasons.
+  { id: 1610612788, abbreviation: 'AND', city: 'Anderson', name: 'Packers', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612789, abbreviation: 'BLB', city: 'Baltimore', name: 'Bullets', conference: 'East', division: 'Eastern', primaryColor: '#c8102e' },
+  { id: 1610612790, abbreviation: 'CHS', city: 'Chicago', name: 'Stags', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612791, abbreviation: 'CLR', city: 'Cleveland', name: 'Rebels', conference: 'West', division: 'Western', primaryColor: '#002d62' },
+  { id: 1610612792, abbreviation: 'DNN', city: 'Denver', name: 'Nuggets', conference: 'West', division: 'Western', primaryColor: '#0e2240' },
+  { id: 1610612793, abbreviation: 'DTF', city: 'Detroit', name: 'Falcons', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612794, abbreviation: 'INJ', city: 'Indianapolis', name: 'Jets', conference: 'West', division: 'Western', primaryColor: '#002d62' },
+  { id: 1610612795, abbreviation: 'INO', city: 'Indianapolis', name: 'Olympians', conference: 'West', division: 'Western', primaryColor: '#002d62' },
+  { id: 1610612796, abbreviation: 'PIT', city: 'Pittsburgh', name: 'Ironmen', conference: 'West', division: 'Western', primaryColor: '#16181c' },
+  { id: 1610612797, abbreviation: 'PRO', city: 'Providence', name: 'Steamrollers', conference: 'East', division: 'Eastern', primaryColor: '#002d62' },
+  { id: 1610612798, abbreviation: 'SHE', city: 'Sheboygan', name: 'Red Skins', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612799, abbreviation: 'STB', city: 'St. Louis', name: 'Bombers', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612800, abbreviation: 'TRH', city: 'Toronto', name: 'Huskies', conference: 'East', division: 'Eastern', primaryColor: '#002d62' },
+  { id: 1610612801, abbreviation: 'WAT', city: 'Waterloo', name: 'Hawks', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
+  { id: 1610612802, abbreviation: 'WSC', city: 'Washington', name: 'Capitols', conference: 'East', division: 'Eastern', primaryColor: '#002b5c' },
 ];
