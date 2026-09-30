@@ -96,7 +96,7 @@ function Group({
                       {rows.indexOf(r) + 1}
                     </span>
                     <TeamMark abbr={r.abbr} color={r.color} size={18} />
-                    <Link href={`/teams/${r.abbr}`} className="link truncate font-medium">
+                    <Link href={`/teams/${r.abbr}`} className="link truncate font-medium" style={{ color: 'var(--ink)' }}>
                       {r.name}
                     </Link>
                   </span>

@@ -128,8 +128,10 @@ body {
 .stat-table tbody tr:nth-child(even) {
   background: var(--panel-2);
 }
-.stat-table tbody tr:hover td {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+/* One solid tint across the whole row, the pinned team cell on striped rows included. */
+.stat-table tbody tr:hover td,
+.stat-table tbody tr:hover td:first-child {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
 }
 /* The sort arrow sits in the header's right padding, so it never pushes the
    label off its column or shifts anything when the sort moves. */
