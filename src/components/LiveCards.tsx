@@ -41,9 +41,8 @@ function ScoreCard({ g }: { g: Game }) {
   // The feed zero-fills quarters to come; while live, only `period` of them have happened.
   const played = state === 'live' ? g.period ?? 0 : Infinity;
   const periods = Math.max(4, g.homeLine?.length ?? 0, g.awayLine?.length ?? 0);
-  // Every card keeps room for 4 quarters + OT so the columns line up across the grid;
-  // the OT slot only gets a label once a game actually goes long. Multi-OT games widen their own card.
-  const cols = scored ? Math.max(5, periods) : 0;
+  // Quarters sit right against the total; an OT game's extra columns push its quarters left.
+  const cols = scored ? periods : 0;
   const hasLine = scored && !!(g.homeLine?.length || g.awayLine?.length);
 
   const row = (abbr: string, color: string, record: string, line: number[] | undefined, score: number, won: boolean) => (
@@ -51,10 +50,10 @@ function ScoreCard({ g }: { g: Game }) {
       <td className="py-1.5">
         <span className="flex items-center gap-2">
           <TeamMark abbr={abbr} color={color} size={22} />
-          <Link href={`/teams/${abbr}`} className="text-sm no-underline hover:underline" style={{ color: 'var(--ink)', fontWeight: won ? 700 : 600 }}>
+          <Link href={`/teams/${abbr}`} className="text-sm leading-none no-underline hover:underline" style={{ color: 'var(--ink)', fontWeight: won ? 700 : 600 }}>
             {abbr}
           </Link>
-          <span className="text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
+          <span className="text-[0.6875rem] leading-none" style={{ color: 'var(--ink-3)' }}>
             {record}
           </span>
         </span>
@@ -86,24 +85,29 @@ function ScoreCard({ g }: { g: Game }) {
       ] as [string, LiveLeader | null | undefined][]).filter((x): x is [string, LiveLeader] => !!x[1])
     : [];
 
+  // Status and tag; once there's a line score they ride in its header row, level with 1 2 3 4.
+  const head = (
+    <div className="flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.08em]">
+      {state === 'live' && (
+        <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: 'var(--hot)' }} />
+      )}
+      <span style={{ color: state === 'live' ? 'var(--hot)' : final ? 'var(--ink-2)' : 'var(--accent)' }}>
+        {state === 'live' && <span className="sr-only">Live: </span>}
+        <Tip day={g.date} status={g.status} />
+      </span>
+      {tag && (
+        <span className="ml-auto truncate font-normal normal-case tracking-normal" style={{ color: 'var(--ink-3)' }}>
+          {tag}
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <article className="panel flex flex-col p-3">
-      <div className="flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.08em]">
-        {state === 'live' && (
-          <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: 'var(--hot)' }} />
-        )}
-        <span style={{ color: state === 'live' ? 'var(--hot)' : final ? 'var(--ink-2)' : 'var(--accent)' }}>
-          {state === 'live' && <span className="sr-only">Live: </span>}
-          <Tip day={g.date} status={g.status} />
-        </span>
-        {tag && (
-          <span className="ml-auto truncate font-normal normal-case tracking-normal" style={{ color: 'var(--ink-3)' }}>
-            {tag}
-          </span>
-        )}
-      </div>
+      {!scored && head}
 
-      <table className="tnum mt-1 w-full table-fixed border-collapse">
+      <table className={`tnum w-full table-fixed border-collapse ${scored ? '' : 'mt-1'}`}>
         <colgroup>
           <col />
           {hasLine && Array.from({ length: cols }, (_, i) => <col key={i} className="w-7" />)}
@@ -112,13 +116,11 @@ function ScoreCard({ g }: { g: Game }) {
         {scored && (
           <thead>
             <tr className="text-[0.625rem] font-semibold" style={{ color: 'var(--ink-3)' }}>
-              <th className="text-left font-normal">
-                <span className="sr-only">Team</span>
-              </th>
+              <th className="text-left">{head}</th>
               {hasLine &&
                 Array.from({ length: cols }, (_, i) => (
                   <th key={i} className="text-center">
-                    {i < periods ? periodLabel(i) : ''}
+                    {periodLabel(i)}
                   </th>
                 ))}
               <th className="pr-3 text-right">T</th>
@@ -142,9 +144,15 @@ function ScoreCard({ g }: { g: Game }) {
                 name={l.name}
                 className="h-7 w-7 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top"
               />
-              <Link href={`/players/${l.playerId}`} className="link">
-                {l.name}
-              </Link>
+              <span>
+                <Link href={`/players/${l.playerId}`} className="font-semibold no-underline hover:underline" style={{ color: 'var(--ink)' }}>
+                  {l.name}
+                </Link>
+                {l.jersey && <span style={{ color: 'var(--ink-3)' }}> #{l.jersey}</span>}
+              </span>
+              <span aria-hidden style={{ color: 'var(--line-2)' }}>
+                |
+              </span>
               <span className="tnum" style={{ color: 'var(--ink-2)' }}>
                 {l.pts} PTS · {l.reb} REB · {l.ast} AST
               </span>

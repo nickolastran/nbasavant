@@ -95,8 +95,16 @@ assert.equal(scored(1610612752), 105, 'Knicks points add up to the Knicks score'
 assert.equal(logs.filter((l) => l.started).length, 10, 'five starters a side');
 assert.deepEqual(lineOf(box.homeTeam), [27, 28, 21, 19], 'Spurs by quarter');
 assert.deepEqual(lineOf(box.awayTeam), [19, 29, 28, 29], 'Knicks by quarter');
-assert.deepEqual(topOf(box.homeTeam), { playerId: 1641705, name: 'Victor Wembanyama', pts: 26, reb: 12, ast: 2 }, 'Spurs top performer');
+assert.deepEqual(topOf(box.homeTeam), { playerId: 1641705, name: 'Victor Wembanyama', jersey: '1', pts: 26, reb: 12, ast: 2 }, 'Spurs top performer');
 assert.equal(topOf(box.awayTeam)?.name, 'Jalen Brunson', 'Knicks top performer: most points');
+const team = (...ls: [string, number, number, number][]) => ({
+  players: ls.map(([n, points, reboundsTotal, assists], i) => ({ personId: i, firstName: n, familyName: '', statistics: { points, reboundsTotal, assists } })),
+});
+assert.equal(topOf(team(['triple', 29, 15, 10], ['scorer', 31, 2, 2]))?.name, 'scorer', '30+ points beats a bigger all-round line');
+assert.equal(topOf(team(['thirty', 30, 1, 1], ['forty', 40, 1, 1]))?.name, 'forty', 'two 30-point scorers: the bigger one');
+assert.equal(topOf(team(['triple', 29, 15, 10], ['scorer', 28, 2, 2]))?.name, 'triple', 'under 30: points + rebounds + assists');
+assert.equal(topOf(team(['a', 20, 5, 5], ['b', 22, 4, 4]))?.name, 'b', 'P+R+A tie goes to the scorer');
+assert.equal(topOf({ players: [] }), null, 'nobody played');
 const vassell = logs.find((l) => l.playerId === 1630170)!;
 assert.deepEqual(
   [vassell.pts, vassell.fgm, vassell.fga, vassell.ast, vassell.plusMinus, vassell.teamId],
