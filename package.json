@@ -14,6 +14,7 @@
     "ingest": "tsx scripts/ingest.ts",
     "test": "tsx src/lib/stats.test.ts && tsx src/lib/sync.test.ts",
     "linescores": "tsx scripts/linescores.ts",
+    "cuplabels": "tsx scripts/cuplabels.ts",
     "sync": "tsx scripts/sync.ts"
   },
   "prisma": {

@@ -165,6 +165,9 @@ export default async function StandingsPage({
   const groups = [...new Set(rows.map(keyOf))].sort().map((k) => ({ key: k, rows: rows.filter((r) => keyOf(r) === k) }));
   const lines =
     !cup && type === 'regular' && view === 'conference' && hasConferences && season ? cutLines(season.startYear) : [];
+  // Divisions and Cup groups sit under their conference.
+  const confs =
+    hasConferences && (cup || view === 'division') ? [...new Set(rows.map((r) => r.conference!))].sort() : [null];
   const cols = cup ? CUP_COLS : type === 'preseason' ? STANDINGS_COLS : [...STANDINGS_COLS, ...RATING_COLS];
 
   const tabHref = (t: string) =>
@@ -221,8 +224,15 @@ export default async function StandingsPage({
 
       {rows.length ? (
         <div className="space-y-6">
-          {groups.map((g) => (
-            <Group key={g.key} title={titleOf(g.key)} rows={g.rows} lines={lines} cols={cols} />
+          {confs.map((c) => (
+            <div key={c ?? 'all'} className="space-y-3">
+              {c && <h2 className="text-lg font-bold tracking-tight">{c}ern Conference</h2>}
+              {groups
+                .filter((g) => !c || g.rows[0].conference === c)
+                .map((g) => (
+                  <Group key={g.key} title={titleOf(g.key)} rows={g.rows} lines={lines} cols={cols} />
+                ))}
+            </div>
           ))}
           <p className="text-xs" style={{ color: 'var(--ink-2)' }}>
             Standings are updated with the completion of each game.
@@ -230,6 +240,24 @@ export default async function StandingsPage({
             {!cup && type === 'regular' && ' Ratings are per 100 possessions.'}
             {cup && ' The group winners and the best second-place team in each conference reach the knockout rounds.'}
           </p>
+          <section className="panel overflow-hidden">
+            <h2
+              className="border-b px-3 py-2 text-sm font-bold uppercase tracking-[0.1em]"
+              style={{ borderColor: 'var(--line)' }}
+            >
+              Glossary
+            </h2>
+            <dl className="gap-x-8 px-3 py-2 text-[0.8125rem] sm:columns-2 lg:columns-3">
+              {cols.map((c) => (
+                <div key={c.h} className="break-inside-avoid py-1">
+                  <dt className="inline font-bold">{c.h}: </dt>
+                  <dd className="inline" style={{ color: 'var(--ink-2)' }}>
+                    {c.tip}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
         </div>
       ) : (
         <p className="panel p-6 text-sm" style={{ color: 'var(--ink-2)' }}>
