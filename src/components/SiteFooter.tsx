@@ -20,7 +20,7 @@ const LINKS = [
 export function SiteFooter() {
   return (
     <footer className="mt-12 border-t" style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}>
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 text-[0.6875rem] uppercase tracking-[0.08em]">
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-4 text-[0.6875rem] uppercase tracking-[0.08em]">
         <span>© {new Date().getFullYear()} Nickolas Tran · NBA//Savant</span>
         <div className="flex flex-wrap items-center gap-2">
           <span className="mr-2">Data: NBA.com, Basketball-Reference. Not affiliated with the NBA.</span>

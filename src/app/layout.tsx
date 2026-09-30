@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
+      <body className="flex min-h-screen flex-col">
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded focus:px-3 focus:py-2"
@@ -47,7 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         <ScoreboardBar />
 
-        <main id="main" className="mx-auto max-w-[1440px] px-4 py-6">
+        <main id="main" className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6">
           {children}
         </main>
 
