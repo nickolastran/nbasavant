@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { legacyId, matcher, normName, resolvePlayer } from './identity';
 import { benchReason, clockParts, gameKind, inches, logsFromBox, minutesPlayed, playsFromPbp, shotsFromPbp } from './nba';
 import { alignment, cupFinal, nn, pctOf, seasonLine, seasonPath, teamIdFor } from './bref';
-import { shiftDay, todayEt } from './dates';
+import { localTip, shiftDay, todayEt } from './dates';
 
 const near = (a: number, b: number, eps: number, msg: string) =>
   assert.ok(Math.abs(a - b) < eps, `${msg} expected ~${b}, got ${a}`);
@@ -229,6 +229,10 @@ assert.equal(cupFinal([{ date_game_csk: '201012150BOS', game_remarks: '' }]), nu
 assert.equal(todayEt(new Date('2026-10-21T01:30:00Z')), '2026-10-20', 'evening games stay on their ET date');
 assert.equal(todayEt(new Date('2026-10-20T16:00:00Z')), '2026-10-20', 'midday');
 assert.equal(todayEt(new Date('2027-01-15T04:59:00Z')), '2027-01-14', 'standard time, just before midnight ET');
+assert.equal(localTip('2026-10-21', '7:30 pm ET', 'America/Los_Angeles'), '4:30 pm PDT', 'daylight time');
+assert.equal(localTip('2027-01-15', '10:00 pm ET', 'Europe/London'), '3:00 am GMT', 'standard time, crosses midnight');
+assert.equal(localTip('2027-01-15', '12:00 pm ET', 'America/New_York'), '12:00 pm EST', 'noon');
+assert.equal(localTip('2027-01-15', 'Final/OT'), 'Final/OT', 'non-times pass through');
 assert.equal(shiftDay('2026-10-31', 1), '2026-11-01', 'next day across a month');
 assert.equal(shiftDay('2026-11-01', -1), '2026-10-31', 'previous day');
 

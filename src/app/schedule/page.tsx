@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { latestSeason, prisma } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
 import { TeamMark } from '@/components/TeamMark';
+import { Tip } from '@/components/Tip';
 import { ViewTabs } from '@/components/ViewTabs';
 import { todayEt } from '@/lib/dates';
 import { TEAM_OPTIONS, seasonOptions } from '@/lib/options';
@@ -129,7 +130,7 @@ export default async function SchedulePage({
                         ))}
                         <div className="mt-1 flex justify-between gap-2">
                           <span className="eyebrow" style={final ? undefined : { color: 'var(--accent)' }}>
-                            {g.status}
+                            <Tip day={date} status={g.status} />
                           </span>
                           {tag(g) && <span className="eyebrow truncate">{tag(g)}</span>}
                         </div>

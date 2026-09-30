@@ -6,6 +6,7 @@ import { PlayByPlay } from '@/components/PlayByPlay';
 import { ShotChart, type Shot } from '@/components/ShotChart';
 import { StatTable, type Col } from '@/components/StatTable';
 import { TeamMark } from '@/components/TeamMark';
+import { Tip } from '@/components/Tip';
 import { liveGame } from '@/lib/live';
 
 export const revalidate = 10;
@@ -70,7 +71,7 @@ function Header({
           <div className="flex items-center justify-end gap-1.5 text-sm font-semibold" style={{ color: live ? 'var(--hot)' : 'var(--ink)' }}>
             {live && <span aria-hidden className="h-2 w-2 animate-pulse rounded-full" style={{ background: 'var(--hot)' }} />}
             {live && <span className="sr-only">Live: </span>}
-            {status}
+            <Tip day={game.date.toISOString().slice(0, 10)} status={status} />
           </div>
           <div className="text-sm" style={{ color: 'var(--ink-2)' }}>
             {longDate(game.date)}

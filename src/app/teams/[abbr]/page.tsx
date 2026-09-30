@@ -5,6 +5,7 @@ import { byRecord, latestSeason, prisma, seasonStandings } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
 import { PercentileBars, type Percentile } from '@/components/PercentileBars';
 import { TeamMark } from '@/components/TeamMark';
+import { Tip } from '@/components/Tip';
 import { todayEt } from '@/lib/dates';
 import { feetInches, fmt, ordinal, pct3, perGame } from '@/lib/format';
 import { minGames, percentileOf } from '@/lib/stats';
@@ -200,7 +201,7 @@ export default async function TeamPage({
                     {next.homeTeamId === team.id ? next.awayTeam.abbreviation : next.homeTeam.abbreviation}
                   </Link>{' '}
                   <span className="tnum" style={{ color: 'var(--ink-3)' }}>
-                    {iso(next.date).slice(5)} · {next.status}
+                    {iso(next.date).slice(5)} · <Tip day={iso(next.date)} status={next.status} />
                   </span>
                 </dd>
               </div>
@@ -366,7 +367,7 @@ export default async function TeamPage({
                       </td>
                       <td>
                         <Link href={`/games/${g.id}`} className="link tnum">
-                          {g.status.startsWith('Final') ? result(g, team.id) : g.status}
+                          {g.status.startsWith('Final') ? result(g, team.id) : <Tip day={iso(g.date)} status={g.status} />}
                         </Link>
                       </td>
                       <td style={{ color: 'var(--ink-3)' }}>{seasonLabel(g) ?? ''}</td>

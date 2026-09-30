@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { animate, motion, useMotionValue } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DatePicker } from '@/components/DatePicker';
 import { TeamMark } from '@/components/TeamMark';
+import { Tip } from '@/components/Tip';
 import { shiftDay, todayEt } from '@/lib/dates';
 import type { LiveGame, LiveLeader, LiveState } from '@/lib/live';
 
@@ -29,18 +32,6 @@ export type Game = {
   homeLeader?: LiveLeader | null;
   awayLeader?: LiveLeader | null;
 };
-
-/** "MON, SEP 21, 2026" — the date the way a scoreboard prints it. */
-const longDate = (iso: string) =>
-  new Date(`${iso}T12:00:00Z`)
-    .toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: 'UTC',
-    })
-    .toUpperCase();
 
 /** Scheduled games carry their tip-off in `status` ("7:30 pm ET"); finals say "Final". */
 const stateOf = (g: Game): LiveState => g.state ?? (g.status.startsWith('Final') ? 'final' : 'pre');
@@ -140,7 +131,7 @@ export function GameCard({ g, leaders = false }: { g: Game; leaders?: boolean })
         )}
         <span style={{ color: state === 'live' ? 'var(--hot)' : final ? 'var(--ink-3)' : 'var(--accent)' }}>
           {state === 'live' && <span className="sr-only">Live: </span>}
-          {g.status}
+          <Tip day={g.date} status={g.status} />
         </span>
         {tag && (
           <span className="ml-auto truncate font-normal" style={{ color: 'var(--ink-3)' }}>
@@ -163,22 +154,24 @@ export function GameCard({ g, leaders = false }: { g: Game; leaders?: boolean })
   );
 }
 
-/**
- * One day's slate under the nav: a labelled date picker, the day's cards, and
- * arrows that walk to the previous/next day that actually has games. The date
- * button is a native date input laid over its own label, so clicking it opens
- * the OS calendar. Days are New York days, the NBA's calendar.
- */
 /** Home page only; every other section has its own content up top. */
 export function ScoreboardBar() {
   return usePathname() === '/' ? <Bar /> : null;
 }
 
+/**
+ * One day's slate under the nav: a labelled date picker, the day's cards, and
+ * arrows that slide the cards a screenful at a time. Days are New York days,
+ * the NBA's calendar.
+ */
 function Bar() {
   const [date, setDate] = useState('');
   const [games, setGames] = useState<Game[]>([]);
   const [busy, setBusy] = useState(true);
-  const picker = useRef<HTMLInputElement>(null);
+  const view = useRef<HTMLDivElement>(null);
+  const track = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const [edge, setEdge] = useState({ start: true, end: true });
   const shown = useLive(games, date);
 
   /** `query` is one of date=/before=/after=, or '' for the latest slate. */
@@ -215,8 +208,32 @@ function Bar() {
     });
   }, [load]);
 
-  const step = (dir: 1 | -1) =>
-    date && load(dir === 1 ? `after=${date}` : `before=${date}`);
+  /** How far the track can slide, and whether the arrows have anywhere to go from `to`. */
+  const limits = useCallback((to: number) => {
+    const max = Math.max(0, (track.current?.scrollWidth ?? 0) - (view.current?.clientWidth ?? 0));
+    setEdge({ start: to >= 0, end: to <= -max });
+    return max;
+  }, []);
+
+  // A new day starts back at its first game; a resize can add or remove room to slide.
+  useEffect(() => {
+    x.set(0);
+    limits(0);
+    const fit = () => limits(x.get());
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [games, x, limits]);
+
+  // Slide by as many whole cards as fit, so a card never ends up cut off on the left.
+  const step = (dir: 1 | -1) => {
+    const second = track.current?.children[1] as HTMLElement | undefined;
+    const card = second?.offsetLeft ?? 1;
+    const page = Math.max(1, Math.floor((view.current?.clientWidth ?? 0) / card)) * card;
+    const max = limits(x.get());
+    const to = Math.min(0, Math.max(-max, x.get() - dir * page));
+    limits(to);
+    animate(x, to, { type: 'spring', stiffness: 260, damping: 32 });
+  };
 
   const arrow =
     'flex h-7 w-7 items-center justify-center rounded border text-base leading-none transition-colors hover:bg-[var(--panel-2)] disabled:opacity-30';
@@ -227,41 +244,13 @@ function Bar() {
         <div className="mb-2 flex items-center gap-3">
           <span className="eyebrow">Scoreboard</span>
 
-          <div
-            // Chrome only opens the calendar from the input's own icon, and ours
-            // is invisible, so ask for it directly on any click in the cell.
-            onClick={() => {
-              try {
-                picker.current?.showPicker();
-              } catch {
-                picker.current?.focus();
-              }
-            }}
-            className="relative flex items-center gap-1.5 rounded border px-2.5 py-1"
-            style={{ borderColor: 'var(--line-2)', background: 'var(--panel)' }}
-            title="Pick a date"
-          >
-            <span aria-hidden className="text-[0.75rem]" style={{ color: 'var(--ink-3)' }}>
-              ▦
-            </span>
-            <span className="tnum text-[0.6875rem] font-semibold tracking-[0.06em]">
-              {date ? longDate(date) : '—'}
-            </span>
-            <input
-              ref={picker}
-              type="date"
-              value={date}
-              onChange={(e) => e.target.value && load(`date=${e.target.value}`)}
-              aria-label="Show games from this date"
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            />
-          </div>
+          <DatePicker value={date} onChange={(d) => load(`date=${d}`)} />
 
           <div className="ml-auto flex gap-1.5">
             <button
               onClick={() => step(-1)}
-              disabled={busy || !date}
-              aria-label="Previous day with games"
+              disabled={edge.start}
+              aria-label="Earlier games"
               className={arrow}
               style={{ borderColor: 'var(--line-2)', background: 'var(--panel)' }}
             >
@@ -269,8 +258,8 @@ function Bar() {
             </button>
             <button
               onClick={() => step(1)}
-              disabled={busy || !date}
-              aria-label="Next day with games"
+              disabled={edge.end}
+              aria-label="Later games"
               className={arrow}
               style={{ borderColor: 'var(--line-2)', background: 'var(--panel)' }}
             >
@@ -281,17 +270,37 @@ function Bar() {
 
         {/* A card is 92px tall; pin the row so an empty or loading day doesn't
             shove the page around. */}
-        <div className="no-scrollbar flex min-h-[92px] gap-2.5 overflow-x-auto">
-          {shown.map((g) => (
-            <div key={g.id} className="w-[14.5rem] shrink-0">
-              <GameCard g={g} />
-            </div>
-          ))}
-          {!shown.length && (
-            <div className="flex items-center text-sm" style={{ color: 'var(--ink-3)' }}>
-              {busy ? 'Loading…' : 'No games on this date'}
-            </div>
-          )}
+        <div
+          ref={view}
+          className="min-h-[92px] overflow-hidden"
+          // Tabbing to an off-screen card makes the browser scroll this box;
+          // hand that distance to the track instead so the arrows stay in sync.
+          onScroll={(e) => {
+            const v = e.currentTarget;
+            const to = Math.max(-limits(0), x.get() - v.scrollLeft);
+            v.scrollLeft = 0;
+            x.set(to);
+            limits(to);
+          }}
+        >
+          <motion.div ref={track} style={{ x }} className="flex gap-2.5">
+            {shown.map((g, i) => (
+              <motion.div
+                key={g.id}
+                className="w-[14.5rem] shrink-0"
+                initial={{ opacity: 0, x: -24 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.04, duration: 0.3, ease: 'easeOut' }}
+              >
+                <GameCard g={g} />
+              </motion.div>
+            ))}
+            {!shown.length && (
+              <div className="flex min-h-[92px] items-center text-sm" style={{ color: 'var(--ink-3)' }}>
+                {busy ? 'Loading…' : 'No games on this date'}
+              </div>
+            )}
+          </motion.div>
         </div>
       </div>
     </div>
