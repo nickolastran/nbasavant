@@ -7,32 +7,35 @@
  */
 import { after } from 'next/server';
 import { prisma } from './db';
-import { FEEDS, benchReason, clockParts, logsFromBox, nbaJson, playsFromPbp, shotsFromPbp } from './nba';
+import { FEEDS, benchReason, clockParts, leaderOf, lineOf, logsFromBox, nbaJson, playsFromPbp, shotsFromPbp, type Leader } from './nba';
 import { syncGame } from './sync';
 
 export type LiveState = 'pre' | 'live' | 'final';
 
-export type LiveLeader = { playerId: number; name: string; pts: number; reb: number; ast: number };
+export type LiveLeader = Leader;
 
 export type LiveGame = {
   gameCode: string;
   state: LiveState;
   /** What a scoreboard prints: "Q3 5:21", "Half", "Final/OT", "7:30 pm ET". */
   status: string;
-  home: { abbr: string; score: number; record: string; leader: LiveLeader | null };
-  away: { abbr: string; score: number; record: string; leader: LiveLeader | null };
+  period: number;
+  home: LiveSide;
+  away: LiveSide;
 };
+
+/** `periods` is points by period, OT included; the feed zero-fills quarters not yet played. */
+type LiveSide = { abbr: string; score: number; record: string; periods: number[]; leader: LiveLeader | null };
 
 const STATE: Record<number, LiveState> = { 1: 'pre', 2: 'live', 3: 'final' };
 
-function side(t: any, leader: any): LiveGame['home'] {
+function side(t: any, leader: any): LiveSide {
   return {
     abbr: t.teamTricode,
     score: t.score ?? 0,
     record: t.wins !== undefined ? `${t.wins}-${t.losses}` : '',
-    leader: leader?.personId
-      ? { playerId: leader.personId, name: leader.name, pts: leader.points, reb: leader.rebounds, ast: leader.assists }
-      : null,
+    periods: lineOf(t),
+    leader: leaderOf(leader),
   };
 }
 
@@ -49,6 +52,7 @@ export async function liveScoreboard(): Promise<{ date: string; games: LiveGame[
     gameCode: g.gameId,
     state: STATE[g.gameStatus] ?? 'pre',
     status: String(g.gameStatusText).trim(),
+    period: g.period ?? 0,
     home: side(g.homeTeam, g.gameLeaders?.homeLeaders),
     away: side(g.awayTeam, g.gameLeaders?.awayLeaders),
   }));
@@ -138,3 +142,4 @@ export async function liveGame(gameCode: string, final: boolean) {
     shots: pbp ? shotsFromPbp(pbp).map((s) => ({ ...s, player: names.get(s.playerId) ?? '' })) : [],
   };
 }
+

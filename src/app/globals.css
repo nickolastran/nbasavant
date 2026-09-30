@@ -34,6 +34,8 @@
 
 html {
   color-scheme: light;
+  /* Keep the scrollbar's lane on short pages too, so the layout doesn't jump sideways between pages. */
+  scrollbar-gutter: stable;
 }
 
 body {

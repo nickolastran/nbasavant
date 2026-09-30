@@ -29,12 +29,16 @@ export type Game = {
   awayRecord: string;
   /** Filled in from the live feed, for today's games only. */
   state?: LiveState;
+  period?: number;
+  /** Points by period, OT included: the live feed for today, the box score for finals (2026-27 on). */
+  homeLine?: number[];
+  awayLine?: number[];
   homeLeader?: LiveLeader | null;
   awayLeader?: LiveLeader | null;
 };
 
 /** Scheduled games carry their tip-off in `status` ("7:30 pm ET"); finals say "Final". */
-const stateOf = (g: Game): LiveState => g.state ?? (g.status.startsWith('Final') ? 'final' : 'pre');
+export const stateOf = (g: Game): LiveState => g.state ?? (g.status.startsWith('Final') ? 'final' : 'pre');
 
 function merge(g: Game, l: LiveGame | undefined): Game {
   if (!l) return g;
@@ -42,6 +46,9 @@ function merge(g: Game, l: LiveGame | undefined): Game {
     ...g,
     state: l.state,
     status: l.status,
+    period: l.period,
+    homeLine: l.home.periods,
+    awayLine: l.away.periods,
     homeScore: l.home.score,
     awayScore: l.away.score,
     homeRecord: l.home.record || g.homeRecord,
@@ -92,10 +99,7 @@ export function useLive(games: Game[], date: string) {
   return games.map((g) => merge(g, live[g.gameCode]));
 }
 
-const leaderLine = (l: LiveLeader | null | undefined, abbr: string) =>
-  l ? `${abbr} ${l.name.split(' ').at(-1)} ${l.pts}p ${l.reb}r ${l.ast}a` : null;
-
-export function GameCard({ g, leaders = false }: { g: Game; leaders?: boolean }) {
+export function GameCard({ g }: { g: Game }) {
   const state = stateOf(g);
   const scored = state !== 'pre';
   const tag = g.kind === 'preseason' ? 'Preseason' : g.kind === 'playoffs' ? 'Playoffs' : g.kind === 'play-in' ? 'Play-In' : g.label;
@@ -141,15 +145,6 @@ export function GameCard({ g, leaders = false }: { g: Game; leaders?: boolean })
       </span>
       {side(g.away, g.awayScore, g.awayRecord, g.awayColor, final && g.awayScore > g.homeScore)}
       {side(g.home, g.homeScore, g.homeRecord, g.homeColor, final && g.homeScore > g.awayScore)}
-      {leaders && (g.awayLeader || g.homeLeader) && (
-        <span className="tnum mt-1 border-t pt-1.5 text-[0.6875rem] leading-relaxed" style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}>
-          {[leaderLine(g.awayLeader, g.away), leaderLine(g.homeLeader, g.home)].filter(Boolean).map((l) => (
-            <span key={l} className="block truncate">
-              {l}
-            </span>
-          ))}
-        </span>
-      )}
     </Link>
   );
 }

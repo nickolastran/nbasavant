@@ -6,7 +6,15 @@ import { useState } from 'react';
  * The NBA's headshot for a person id. Players the site couldn't match to an
  * NBA id, and many from before the 1990s, have none; the image just goes away.
  */
-export function Headshot({ id, name }: { id: number; name: string }) {
+export function Headshot({
+  id,
+  name,
+  className = 'h-[95px] w-[130px] shrink-0 self-end object-contain object-bottom',
+}: {
+  id: number;
+  name: string;
+  className?: string;
+}) {
   const [ok, setOk] = useState(true);
   if (!ok) return null;
   return (
@@ -18,7 +26,11 @@ export function Headshot({ id, name }: { id: number; name: string }) {
       height={95}
       referrerPolicy="no-referrer"
       onError={() => setOk(false)}
-      className="h-[95px] w-[130px] shrink-0 self-end object-contain object-bottom"
+      // An image that failed before hydration never fires onError for React; catch it on mount.
+      ref={(img) => {
+        if (img?.complete && !img.naturalWidth) setOk(false);
+      }}
+      className={className}
     />
   );
 }

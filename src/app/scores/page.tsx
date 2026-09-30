@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { prisma } from '@/lib/db';
-import { LiveCards } from '@/components/LiveCards';
+import { LiveCards, ScoresDate } from '@/components/LiveCards';
 import type { Game } from '@/components/ScoreboardBar';
 import { shiftDay, todayEt } from '@/lib/dates';
+import type { GameLeaders } from '@/lib/nba';
 
 export const metadata = { title: 'Scores' };
 export const revalidate = 60;
@@ -46,17 +46,23 @@ export default async function ScoresPage({
     orderBy: { id: 'asc' },
   });
 
-  // Season-to-date records; the live feed replaces them with today's for today's games.
-  const records = new Map<number, string>(
-    games.length
-      ? (
-          await prisma.teamStats.findMany({
-            where: { seasonId: games[0].seasonId },
-            select: { teamId: true, wins: true, losses: true },
-          })
-        ).map((r) => [r.teamId, `${r.wins}-${r.losses}`])
-      : [],
-  );
+  // Each team's regular-season record as of this day: after its game once that's
+  // final, going in before tip-off. The live feed replaces them for today's games.
+  const record = new Map<number, [number, number]>();
+  if (games.length) {
+    const played = await prisma.game.findMany({
+      where: { seasonId: games[0].seasonId, kind: 'regular', status: { startsWith: 'Final' }, date: { lt: new Date(`${shiftDay(day, 1)}T00:00:00Z`) } },
+      select: { homeTeamId: true, awayTeamId: true, homeScore: true, awayScore: true },
+    });
+    for (const g of played) {
+      const [winner, loser] = g.homeScore > g.awayScore ? [g.homeTeamId, g.awayTeamId] : [g.awayTeamId, g.homeTeamId];
+      const w = record.get(winner) ?? [0, 0];
+      const l = record.get(loser) ?? [0, 0];
+      record.set(winner, [w[0] + 1, w[1]]);
+      record.set(loser, [l[0], l[1] + 1]);
+    }
+  }
+  const recordOf = (teamId: number) => (record.get(teamId) ?? [0, 0]).join('-');
 
   const cards: Game[] = games.map((g) => ({
     id: g.id,
@@ -73,31 +79,20 @@ export default async function ScoresPage({
     awayColor: g.awayTeam.primaryColor,
     homeScore: g.homeScore,
     awayScore: g.awayScore,
-    homeRecord: records.get(g.homeTeamId) ?? '',
-    awayRecord: records.get(g.awayTeamId) ?? '',
+    homeRecord: recordOf(g.homeTeamId),
+    awayRecord: recordOf(g.awayTeamId),
+    homeLine: g.homeLine,
+    awayLine: g.awayLine,
+    homeLeader: (g.leaders as GameLeaders | null)?.home,
+    awayLeader: (g.leaders as GameLeaders | null)?.away,
   }));
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold tracking-tight">{longDate(day)}</h1>
+        <h1 className="text-xl font-bold tracking-tight">Scoreboard</h1>
+        <ScoresDate date={day} />
         {day === today && <span className="eyebrow" style={{ color: 'var(--accent)' }}>Today</span>}
-        <div className="flex gap-2">
-          <Link href={`/scores?date=${shiftDay(day, -1)}`} className="btn-ghost no-underline">
-            ‹ Prev day
-          </Link>
-          <Link href={`/scores?date=${shiftDay(day, 1)}`} className="btn-ghost no-underline">
-            Next day ›
-          </Link>
-          {day !== today && (
-            <Link href={`/scores?date=${today}`} className="btn-ghost no-underline">
-              Today
-            </Link>
-          )}
-        </div>
-        <Link href="/schedule" className="link ml-auto text-sm">
-          Full schedule
-        </Link>
       </div>
 
       {cards.length ? (

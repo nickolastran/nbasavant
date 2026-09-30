@@ -186,3 +186,29 @@ export function playsFromPbp(game: any) {
     };
   });
 }
+
+export type Leader = { playerId: number; name: string; pts: number; reb: number; ast: number };
+/** What `games.leaders` holds. */
+export type GameLeaders = { home: Leader | null; away: Leader | null };
+
+/** A scoreboard feed's `gameLeaders.homeLeaders` (live CDN board or stats.nba.com scoreboardv3). */
+export const leaderOf = (l: any): Leader | null =>
+  l?.personId ? { playerId: l.personId, name: l.name, pts: l.points, reb: l.rebounds, ast: l.assists } : null;
+
+/** A team's top performer in a box score: most points, then most points + rebounds + assists. */
+export function topOf(team: any): Leader | null {
+  const [best] = (team.players as any[])
+    .filter((p) => p.played === '1')
+    .map((p) => ({
+      playerId: p.personId as number,
+      name: `${p.firstName} ${p.familyName}`.trim(),
+      pts: p.statistics.points as number,
+      reb: p.statistics.reboundsTotal as number,
+      ast: p.statistics.assists as number,
+    }))
+    .sort((a, b) => b.pts - a.pts || b.pts + b.reb + b.ast - (a.pts + a.reb + a.ast));
+  return best ?? null;
+}
+
+/** Points by period, OT included, from any NBA feed's team (`periods: [{ score }]`). */
+export const lineOf = (team: any): number[] => ((team.periods ?? []) as any[]).map((p) => p.score as number);

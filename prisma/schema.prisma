@@ -189,6 +189,11 @@ model Game {
   kind       String   @default("regular")
   /// "Emirates NBA Cup · East Group A", "NBA Paris Game"...
   label      String?
+  /// Points by period, OT included. Empty where no line score is on record.
+  homeLine   Int[]    @default([])
+  awayLine   Int[]    @default([])
+  /// Each side's top performer, `{ home, away }` of `{ playerId, name, pts, reb, ast }` (a `GameLeaders`).
+  leaders    Json?
 
   gameLogs PlayerGameLog[]
   shots    ShotData[]

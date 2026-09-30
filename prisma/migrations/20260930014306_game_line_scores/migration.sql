@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "games" ADD COLUMN     "awayLine" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+ADD COLUMN     "homeLine" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+ADD COLUMN     "leaders" JSONB;

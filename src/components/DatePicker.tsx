@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { todayEt } from '@/lib/dates';
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -18,6 +18,7 @@ const longDate = (iso: string) =>
  * native popover, so outside clicks and Escape close it for free.
  */
 export function DatePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
+  const id = useId();
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ y: 2000, m: 0 });
@@ -44,7 +45,7 @@ export function DatePicker({ value, onChange }: { value: string; onChange: (iso:
     <>
       <button
         ref={btn}
-        popoverTarget="scoreboard-calendar"
+        popoverTarget={id}
         className="flex items-center gap-1.5 rounded border px-2.5 py-1 transition-colors hover:bg-[var(--panel-2)]"
         style={{ borderColor: 'var(--line-2)', background: 'var(--panel)' }}
         aria-label={`Pick a date, showing ${value ? longDate(value) : 'none'}`}
@@ -57,7 +58,7 @@ export function DatePicker({ value, onChange }: { value: string; onChange: (iso:
 
       <div
         ref={pop}
-        id="scoreboard-calendar"
+        id={id}
         popover="auto"
         // Top-layer popovers are fixed and centred by default; pin this one under its button.
         onToggle={(e) => {

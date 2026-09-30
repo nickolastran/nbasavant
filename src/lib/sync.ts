@@ -9,7 +9,7 @@ import { TEAMS } from '../../prisma/teams';
 import { fetchSeason, nn, type PlayerSeason, type TeamSeason } from './bref';
 import { shiftDay, todayEt } from './dates';
 import { matcher, resolvePlayer } from './identity';
-import { FEEDS, gameKind, inches, logsFromBox, nbaJson, rowsOf, shotsFromPbp } from './nba';
+import { FEEDS, gameKind, inches, lineOf, logsFromBox, nbaJson, rowsOf, shotsFromPbp, topOf, type GameLeaders } from './nba';
 import { LEAGUE_2024_25, efgPct, playerDrtg, playerOrtg, tsPct, type BoxTotals, type TeamTotals } from './stats';
 
 const KNOWN_TEAMS = new Set(TEAMS.map((t) => t.id));
@@ -252,7 +252,11 @@ export async function syncGame(db: PrismaClient, gameCode: string) {
   await db.$transaction([
     db.game.update({
       where: { id: game.id },
-      data: { homeScore: box.homeTeam.score, awayScore: box.awayTeam.score, period: box.period, status: otStatus(box.period) },
+      data: {
+        homeScore: box.homeTeam.score, awayScore: box.awayTeam.score, period: box.period, status: otStatus(box.period),
+        homeLine: lineOf(box.homeTeam), awayLine: lineOf(box.awayTeam),
+        leaders: { home: topOf(box.homeTeam), away: topOf(box.awayTeam) } satisfies GameLeaders,
+      },
     }),
     ...(game.kind === 'regular'
       ? [

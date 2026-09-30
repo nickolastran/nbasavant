@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { legacyId, matcher, normName, resolvePlayer } from './identity';
-import { benchReason, clockParts, gameKind, inches, logsFromBox, minutesPlayed, playsFromPbp, shotsFromPbp } from './nba';
+import { benchReason, clockParts, gameKind, inches, lineOf, logsFromBox, minutesPlayed, playsFromPbp, shotsFromPbp, topOf } from './nba';
 import { alignment, cupFinal, nn, pctOf, seasonLine, seasonPath, teamIdFor } from './bref';
 import { localTip, shiftDay, todayEt } from './dates';
 
@@ -93,6 +93,10 @@ const scored = (teamId: number) => logs.filter((l) => l.teamId === teamId).reduc
 assert.equal(scored(1610612759), 95, 'Spurs points add up to the Spurs score');
 assert.equal(scored(1610612752), 105, 'Knicks points add up to the Knicks score');
 assert.equal(logs.filter((l) => l.started).length, 10, 'five starters a side');
+assert.deepEqual(lineOf(box.homeTeam), [27, 28, 21, 19], 'Spurs by quarter');
+assert.deepEqual(lineOf(box.awayTeam), [19, 29, 28, 29], 'Knicks by quarter');
+assert.deepEqual(topOf(box.homeTeam), { playerId: 1641705, name: 'Victor Wembanyama', pts: 26, reb: 12, ast: 2 }, 'Spurs top performer');
+assert.equal(topOf(box.awayTeam)?.name, 'Jalen Brunson', 'Knicks top performer: most points');
 const vassell = logs.find((l) => l.playerId === 1630170)!;
 assert.deepEqual(
   [vassell.pts, vassell.fgm, vassell.fga, vassell.ast, vassell.plusMinus, vassell.teamId],

@@ -181,8 +181,8 @@ async function NbaGame({ game }: { game: GameRow }) {
       {[
         { t: data.away, name: `${game.awayTeam.city} ${game.awayTeam.name}` },
         { t: data.home, name: `${game.homeTeam.city} ${game.homeTeam.name}` },
-      ].map(({ t, name }) => (
-        <section key={t.teamId}>
+      ].map(({ t, name }, i) => (
+        <section key={t.teamId} id={i === 0 ? 'box' : undefined} className="scroll-mt-4">
           <h2 className="mb-2 text-lg font-bold tracking-tight">
             {name} <span className="tnum font-normal">{t.score}</span>
           </h2>
@@ -233,7 +233,7 @@ async function NbaGame({ game }: { game: GameRow }) {
         </section>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div id="gamecast" className="grid scroll-mt-4 gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <ShotChart
           shots={data.shots.map(
             (s): Shot => ({
