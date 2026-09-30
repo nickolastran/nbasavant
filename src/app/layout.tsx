@@ -3,6 +3,7 @@ import Link from 'next/link';
 import './globals.css';
 import { PlayerSearch } from '@/components/PlayerSearch';
 import { ScoreboardBar } from '@/components/ScoreboardBar';
+import { SiteFooter } from '@/components/SiteFooter';
 import { SiteNav } from '@/components/SiteNav';
 
 export const metadata: Metadata = {
@@ -50,21 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
 
-        <footer
-          className="mt-12 border-t px-4 py-6 text-xs"
-          style={{ borderColor: 'var(--line)', color: 'var(--ink-3)' }}
-        >
-          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3">
-            <span>
-              Every season since 1946-47 from basketball-reference.com; scores, box scores, play-by-play,
-              shots, rosters and transactions from the NBA&apos;s own feeds. Shot charts before 2026-27 are
-              derived to match each player&apos;s published shooting splits.
-            </span>
-            <a href="/api-docs" className="link">
-              API docs
-            </a>
-          </div>
-        </footer>
+        <SiteFooter />
       </body>
     </html>
   );
