@@ -74,3 +74,17 @@ export const TEAMS = [
   { id: 1610612801, abbreviation: 'WAT', city: 'Waterloo', name: 'Hawks', conference: 'West', division: 'Western', primaryColor: '#c8102e' },
   { id: 1610612802, abbreviation: 'WSC', city: 'Washington', name: 'Capitols', conference: 'East', division: 'Eastern', primaryColor: '#002b5c' },
 ];
+
+/** Relocated franchises' old rows, by the current team they became. Folded franchises have none. */
+export const SUCCESSOR: Record<string, string> = {
+  SEA: 'OKC', VAN: 'MEM', NJN: 'BKN', NYN: 'BKN', MNL: 'LAL', PHW: 'GSW', SFW: 'GSW',
+  TRI: 'ATL', MLH: 'ATL', STL: 'ATL', FTW: 'DET', ROC: 'SAC', CIN: 'SAC', KCK: 'SAC',
+  SYR: 'PHI', CHZ: 'WAS', BAL: 'WAS', SDR: 'HOU', BUF: 'LAC', SDC: 'LAC', NOJ: 'UTA',
+};
+
+/** Names a current franchise went by without getting a row of its own (renamed in place). */
+export const FORMER_NAMES: Record<string, string[]> = {
+  WAS: ['Capital Bullets', 'Washington Bullets'],
+  CHA: ['Charlotte Bobcats'],
+  NOP: ['New Orleans Hornets', 'New Orleans/Oklahoma City Hornets'],
+};

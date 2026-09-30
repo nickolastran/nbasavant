@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import './globals.css';
-import { PlayerSearch } from '@/components/PlayerSearch';
+import { SiteSearch } from '@/components/SiteSearch';
 import { ScoreboardBar } from '@/components/ScoreboardBar';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SiteNav } from '@/components/SiteNav';
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
 
             <div className="ml-auto flex items-center gap-3">
-              <PlayerSearch />
+              <SiteSearch />
             </div>
           </div>
         </header>
