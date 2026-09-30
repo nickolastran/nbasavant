@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
 
         <header className="border-b" style={{ background: 'var(--chrome)', borderColor: 'var(--line)' }}>
-          <div className="mx-auto flex max-w-[1440px] items-center gap-4 px-4 py-3">
+          <div className="flex items-center gap-4 px-4 py-3">
             <Link
               href="/"
               className="flex items-baseline text-lg font-extrabold uppercase tracking-tight no-underline"

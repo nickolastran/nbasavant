@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TeamMark } from '@/components/TeamMark';
 import { shiftDay, todayEt } from '@/lib/dates';
@@ -168,7 +169,12 @@ export function GameCard({ g, leaders = false }: { g: Game; leaders?: boolean })
  * button is a native date input laid over its own label, so clicking it opens
  * the OS calendar. Days are New York days, the NBA's calendar.
  */
+/** Home page only; every other section has its own content up top. */
 export function ScoreboardBar() {
+  return usePathname() === '/' ? <Bar /> : null;
+}
+
+function Bar() {
   const [date, setDate] = useState('');
   const [games, setGames] = useState<Game[]>([]);
   const [busy, setBusy] = useState(true);
@@ -217,7 +223,7 @@ export function ScoreboardBar() {
 
   return (
     <div className="border-b" style={{ background: 'var(--surface)', borderColor: 'var(--line)' }}>
-      <div className="mx-auto max-w-[1440px] px-4 py-3">
+      <div className="px-4 py-3">
         <div className="mb-2 flex items-center gap-3">
           <span className="eyebrow">Scoreboard</span>
 

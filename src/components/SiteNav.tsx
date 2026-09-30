@@ -57,7 +57,7 @@ export function SiteNav() {
 
   return (
     <div className="border-b" style={{ background: 'var(--chrome-2)', borderColor: 'var(--line)' }}>
-      <div className="mx-auto flex max-w-[1440px] items-center gap-3 px-4 py-2">
+      <div className="flex items-center gap-3 px-4 py-2">
         <nav
           aria-label="Sections"
           className="no-scrollbar flex flex-1 gap-1.5 overflow-x-auto"
