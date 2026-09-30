@@ -177,6 +177,18 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* Loading placeholders: a soft pulse in the table's own greys. */
+.skeleton {
+  display: block;
+  background: var(--line);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
