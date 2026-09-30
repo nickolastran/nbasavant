@@ -21,22 +21,36 @@ export async function getSeason(key?: string) {
 export const latestSeason = () => prisma.season.findFirst({ orderBy: { startYear: 'desc' } });
 
 /**
- * One season's standings, every split computed from its regular-season finals,
- * so any season since 1946-47 works and a season that hasn't tipped off shows
- * each scheduled team at 0-0. Names and alignment are that season's own.
+ * One season's standings, every split computed from its finals, so any season
+ * since 1946-47 works and a season that hasn't tipped off shows each scheduled
+ * team at 0-0. Names and alignment are that season's own. `cup` counts only
+ * NBA Cup group games and tags each team with its group ("East Group A").
  */
-export async function seasonStandings(seasonId: number) {
+export async function seasonStandings(seasonId: number, kind: 'regular' | 'preseason' | 'cup' = 'regular') {
   const [games, stats, teams] = await Promise.all([
     prisma.game.findMany({
-      where: { seasonId, kind: 'regular' },
-      select: { date: true, homeTeamId: true, awayTeamId: true, homeScore: true, awayScore: true, status: true },
+      where: {
+        seasonId,
+        kind: kind === 'preseason' ? 'preseason' : 'regular',
+        // "Emirates NBA Cup · East Group A": the group stage, not the knockouts.
+        ...(kind === 'cup' && { label: { contains: ' Group ' } }),
+      },
+      select: { date: true, homeTeamId: true, awayTeamId: true, homeScore: true, awayScore: true, status: true, label: true },
     }),
     prisma.teamStats.findMany({ where: { seasonId } }),
     prisma.team.findMany(),
   ]);
   const byId = new Map(teams.map((t) => [t.id, t]));
   const season = new Map(stats.map((s) => [s.teamId, s]));
-  const ids = new Set([...games.flatMap((g) => [g.homeTeamId, g.awayTeamId]), ...season.keys()]);
+  const group = new Map<number, string>();
+  for (const g of games) {
+    const name = g.label?.match(/(East|West) Group [A-Z]/)?.[0];
+    if (name) group.set(g.homeTeamId, name).set(g.awayTeamId, name);
+  }
+  const ids =
+    kind === 'regular'
+      ? new Set([...games.flatMap((g) => [g.homeTeamId, g.awayTeamId]), ...season.keys()])
+      : new Set(games.flatMap((g) => [g.homeTeamId, g.awayTeamId]));
   // A season BR hasn't published stats for yet (this one, early on) falls
   // back to the franchise's current alignment.
   const alignment = new Map(
@@ -61,6 +75,7 @@ export async function seasonStandings(seasonId: number) {
     return {
       ...r,
       ...alignment.get(r.teamId)!,
+      group: group.get(r.teamId) ?? null,
       abbr: t.abbreviation,
       name: s?.name ?? `${t.city} ${t.name}`,
       color: t.primaryColor,

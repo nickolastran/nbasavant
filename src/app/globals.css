@@ -170,11 +170,16 @@ select {
   font-size: 0.8125rem;
 }
 input:focus-visible,
-select:focus-visible,
 button:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+/* Chrome rings a select on every click; a dark border still marks keyboard focus. */
+select:focus {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
 }
 
 /* Loading placeholders: a soft pulse in the table's own greys. */

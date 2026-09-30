@@ -20,9 +20,10 @@ export type Field =
 
 /**
  * Filters live in the URL, so every view is linkable and the back button works.
- * One row above the content, per the site's filter convention.
+ * One row above the content, per the site's filter convention. `bare` drops the
+ * box, the visible labels and the clear button, for a few inline dropdowns.
  */
-export function FilterBar({ fields }: { fields: Field[] }) {
+export function FilterBar({ fields, bare }: { fields: Field[]; bare?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -36,12 +37,12 @@ export function FilterBar({ fields }: { fields: Field[] }) {
 
   return (
     <div
-      className="mb-4 flex flex-wrap items-end gap-x-4 gap-y-2 rounded border px-3 py-2.5"
-      style={{ borderColor: 'var(--line)', background: 'var(--panel-2)' }}
+      className={bare ? 'flex flex-wrap items-center gap-2' : 'mb-4 flex flex-wrap items-end gap-x-4 gap-y-2 rounded border px-3 py-2.5'}
+      style={bare ? undefined : { borderColor: 'var(--line)', background: 'var(--panel-2)' }}
     >
       {fields.map((f) => (
         <label key={f.name} className="flex flex-col gap-1">
-          <span className="eyebrow">{f.label}</span>
+          <span className={bare ? 'sr-only' : 'eyebrow'}>{f.label}</span>
           {f.kind === 'select' ? (
             <select value={sp.get(f.name) ?? f.defaultValue ?? ''} onChange={(e) => set(f.name, e.target.value)}>
               {f.options.map((o) => (
@@ -68,7 +69,7 @@ export function FilterBar({ fields }: { fields: Field[] }) {
           )}
         </label>
       ))}
-      {[...sp.keys()].length > 0 && (
+      {!bare && [...sp.keys()].length > 0 && (
         <button className="btn-ghost" onClick={() => router.replace(pathname, { scroll: false })}>
           Clear filters
         </button>
