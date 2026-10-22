@@ -59,29 +59,35 @@ function merge(g: Game, l: LiveGame | undefined): Game {
 }
 
 /**
- * Today's cards with the live feed laid over them. Polls every 15 s while a
- * game is on, every minute before tip-off (to catch it), not at all once
- * everything is final — and never while the tab is hidden.
+ * The day's cards with the live feed laid over them. The feed keeps its own
+ * calendar (last night's late games stay on it past midnight ET), so it decides
+ * which day is live, not the clock. Polls every 15 s while a game is on, every
+ * minute before tip-off (to catch it), not at all once everything is final or
+ * the feed has moved past this day — and never while the tab is hidden.
  */
 export function useLive(games: Game[], date: string) {
   const [live, setLive] = useState<Record<string, LiveGame>>({});
-  const isToday = date === todayEt();
+  const recent = date >= shiftDay(todayEt(), -1);
 
   useEffect(() => {
-    if (!isToday || !games.length) return;
+    if (!recent || !games.length) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     const tick = async () => {
-      let next = 60_000;
+      // Hidden: no request, just check back soon so a returning viewer isn't a minute behind.
+      let next = 5_000;
       if (document.visibilityState === 'visible') {
+        next = 60_000;
         try {
           const res = await fetch('/api/live/scoreboard');
           if (res.ok) {
-            const board: { games: LiveGame[] } = await res.json();
-            if (stopped) return;
-            setLive(Object.fromEntries(board.games.map((g) => [g.gameCode, g])));
-            if (board.games.some((g) => g.state === 'live')) next = 15_000;
-            else if (board.games.every((g) => g.state === 'final')) return;
+            const board: { date: string; games: LiveGame[] } = await res.json();
+            if (stopped || board.date > date) return;
+            if (board.date === date) {
+              setLive(Object.fromEntries(board.games.map((g) => [g.gameCode, g])));
+              if (board.games.some((g) => g.state === 'live')) next = 15_000;
+              else if (board.games.every((g) => g.state === 'final')) return;
+            }
           }
         } catch {
           // Offline or the feed is down: the database's version stays on screen.
@@ -94,7 +100,7 @@ export function useLive(games: Game[], date: string) {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [isToday, games]);
+  }, [recent, date, games]);
 
   return games.map((g) => merge(g, live[g.gameCode]));
 }
@@ -194,13 +200,19 @@ function Bar() {
     }
   }, []);
 
-  // Open on the next day that has games; in the off-season fall back to the
-  // last one played.
+  // Open on the live feed's day (last night's slate until the NBA rolls it
+  // over in the morning, as ESPN does), else the next day that has games; in
+  // the off-season fall back to the last one played.
   useEffect(() => {
-    const today = todayEt();
-    load(`after=${shiftDay(today, -1)}`).then((n) => {
-      if (!n) load(`before=${today}`);
-    });
+    fetch('/api/live/scoreboard')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((board: { date: string } | null) => {
+        const today = board?.date ?? todayEt();
+        load(`after=${shiftDay(today, -1)}`).then((n) => {
+          if (!n) load(`before=${today}`);
+        });
+      });
   }, [load]);
 
   /** How far the track can slide, and whether the arrows have anywhere to go from `to`. */

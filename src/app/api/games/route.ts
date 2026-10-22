@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { page, respond } from '@/lib/api';
+import { todayEt } from '@/lib/dates';
+import { syncGame } from '@/lib/sync';
 
 /** GET /api/games?season=2026-27&team=BOS&date=2026-10-21&before=&after= */
 export async function GET(req: NextRequest) {
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest) {
     date = near.date.toISOString().slice(0, 10);
   }
 
-  const games = await prisma.game.findMany({
+  const query = () => prisma.game.findMany({
     where: {
       ...(sp.get('season') ? { season: { key: sp.get('season')! } } : {}),
       ...(date ? { date: { gte: new Date(date), lt: new Date(Date.parse(date) + 864e5) } } : {}),
@@ -45,6 +47,17 @@ export async function GET(req: NextRequest) {
     take: limit,
     skip: offset,
   });
+  let games = await query();
+
+  // A past day still showing tip-off times means nobody caught those finals
+  // (the live write-through only sees today; the cron runs once a day). Save
+  // them now so the first visitor sees scores.
+  const today = todayEt();
+  const stale = games.filter((g) => !g.status.startsWith('Final') && g.date.toISOString().slice(0, 10) < today);
+  if (stale.length) {
+    await Promise.all(stale.map((g) => syncGame(prisma, g.gameCode).catch((e) => console.error('heal', g.gameCode, e))));
+    games = await query();
+  }
 
   // Records shown beside each team. One lookup for the whole page of games.
   // ponytail: season-final W-L, not as-of-tip-off; swap for a games-played-
