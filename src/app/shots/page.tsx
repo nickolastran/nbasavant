@@ -131,7 +131,7 @@ export default async function ShotsPage({
             { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
             { kind: 'text', name: 'player', label: 'Shooter', placeholder: 'Player name' },
             { kind: 'text', name: 'defender', label: 'Defender', placeholder: 'Player name' },
-            { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS },
+            { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS, logos: true },
             {
               kind: 'select', name: 'zone', label: 'Zone',
               options: [{ value: '', label: 'All zones' }, ...ZONES.map((z) => ({ value: z, label: z }))],

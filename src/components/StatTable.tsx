@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Headshot } from '@/components/Headshot';
+import { TeamMark } from '@/components/TeamMark';
 import { downloadCsv, downloadJson } from '@/lib/export';
 
 /**
@@ -18,6 +20,12 @@ export type Col<T> = {
   shade?: boolean;
   /** Set for stats where lower is better (DRtg, turnovers). */
   lowerIsBetter?: boolean;
+  /** Leave zero unshaded: for counts where nothing isn't "cold" (double-doubles). */
+  plainZero?: boolean;
+  /** The cell is a team abbreviation: show its logo instead. */
+  logo?: boolean;
+  /** A short label column (team, position): centered between vertical rules. */
+  divide?: boolean;
   title?: string;
 };
 
@@ -28,19 +36,27 @@ type Props<T> = {
   /** Links the first column: `${href.base}/${row[href.key]}`. */
   href?: { base: string; key: keyof T & string };
   filename?: string;
+  /** Rows "show more" adds; `firstPage` (default the same) is how many show at the start. */
   pageSize?: number;
+  firstPage?: number;
+  /** Grow with the page instead of scrolling inside a 70vh box. */
+  tall?: boolean;
+  /** A headshot beside the first column, by this key's NBA person id. */
+  photo?: keyof T & string;
+  /** Number the rows in the current sort, left of the first column. */
+  ranked?: boolean;
   caption?: string;
   /** Shown instead of rows when there are none. */
   empty?: string;
 };
 
 export function StatTable<T extends Record<string, any>>({
-  rows, cols, initialSort, href, filename = 'nba-savant', pageSize = 50, caption,
+  rows, cols, initialSort, href, filename = 'nba-savant', pageSize = 50, firstPage = pageSize, tall, photo, ranked, caption,
   empty = 'No players match these filters. Try widening the minimum games or clearing the team.',
 }: Props<T>) {
   const [sort, setSort] = useState<string>(initialSort ?? cols[1]?.key ?? cols[0].key);
   const [dir, setDir] = useState<'asc' | 'desc'>('desc');
-  const [shown, setShown] = useState(pageSize);
+  const [shown, setShown] = useState(firstPage);
 
   const sorted = useMemo(() => {
     const out = [...rows].sort((a, b) => {
@@ -77,6 +93,7 @@ export function StatTable<T extends Record<string, any>>({
   }, [rows, cols]);
 
   const shadeOf = (c: Col<T>, v: number) => {
+    if (c.plainZero && v === 0) return undefined;
     const p = ranks[c.key]?.get(v);
     if (p === undefined) return undefined;
     const t = (c.lowerIsBetter ? 1 - p : p) * 2 - 1; // -1 cold .. +1 hot
@@ -94,6 +111,14 @@ export function StatTable<T extends Record<string, any>>({
   };
 
   const visible = sorted.slice(0, shown);
+  const lead = (row: T, text: string) =>
+    href ? (
+      <Link href={`${href.base}/${row[href.key]}`} className="link font-medium">
+        {text}
+      </Link>
+    ) : (
+      text
+    );
 
   return (
     <div>
@@ -109,7 +134,7 @@ export function StatTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      <div className="panel max-h-[70vh] overflow-auto">
+      <div className={`panel overflow-auto ${tall ? '' : 'max-h-[70vh]'}`}>
         <table className="stat-table">
           <thead>
             <tr>
@@ -118,6 +143,7 @@ export function StatTable<T extends Record<string, any>>({
                   key={c.key}
                   title={c.title ?? c.label}
                   scope="col"
+                  className={c.divide ? 'divide' : undefined}
                   aria-sort={sort === c.key ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                   onClick={() => click(c.key)}
                   onKeyDown={(e) => e.key === 'Enter' && click(c.key)}
@@ -142,16 +168,34 @@ export function StatTable<T extends Record<string, any>>({
                   return (
                     <td
                       key={c.key}
+                      className={c.divide ? 'divide' : undefined}
                       style={
                         missing
                           ? { color: 'var(--ink-3)' }
                           : c.shade ? { background: shadeOf(c, Number(raw)) } : undefined
                       }
                     >
-                      {j === 0 && href ? (
-                        <Link href={`${href.base}/${row[href.key]}`} className="link font-medium">
-                          {text}
-                        </Link>
+                      {j === 0 ? (
+                        <span className="flex items-center gap-2">
+                          {ranked && (
+                            <span className="w-6 shrink-0 text-right text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
+                              {i + 1}
+                            </span>
+                          )}
+                          {photo && (
+                            <Headshot
+                              id={row[photo]}
+                              name=""
+                              className="h-6 w-6 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top"
+                            />
+                          )}
+                          {lead(row, text)}
+                        </span>
+                      ) : c.logo && raw ? (
+                        <span className="inline-flex align-middle" title={text}>
+                          <TeamMark abbr={text} size={20} />
+                          <span className="sr-only">{text}</span>
+                        </span>
                       ) : (
                         text
                       )}
@@ -172,7 +216,7 @@ export function StatTable<T extends Record<string, any>>({
       </div>
 
       {shown < sorted.length && (
-        <button className="btn-ghost mt-2" onClick={() => setShown((s) => s + pageSize)}>
+        <button className="btn-ghost mx-auto mt-2 block" onClick={() => setShown((s) => s + pageSize)}>
           Show {Math.min(pageSize, sorted.length - shown)} more ({sorted.length - shown} left)
         </button>
       )}

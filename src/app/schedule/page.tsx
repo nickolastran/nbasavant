@@ -74,7 +74,7 @@ export default async function SchedulePage({
         <FilterBar
           fields={[
             { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: season?.key },
-            { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS },
+            { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS, logos: true },
           ]}
         />
       </Suspense>

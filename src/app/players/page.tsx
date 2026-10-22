@@ -4,6 +4,7 @@ import { FilterBar } from '@/components/FilterBar';
 import { StatTable, type Col } from '@/components/StatTable';
 import { ViewTabs } from '@/components/ViewTabs';
 import { perGame } from '@/lib/format';
+import { minGames } from '@/lib/stats';
 import { POSITION_OPTIONS, TEAM_OPTIONS, seasonOptions } from '@/lib/options';
 
 export const metadata = { title: 'Player Stats' };
@@ -19,14 +20,13 @@ const VIEWS = [
 
 const LEAD: Col<Row>[] = [
   { key: 'player', label: 'Player' },
-  { key: 'team', label: 'Team' },
-  { key: 'pos', label: 'Pos' },
+  { key: 'team', label: 'Team', divide: true, logo: true },
+  { key: 'pos', label: 'Pos', divide: true },
   { key: 'gp', label: 'GP' },
 ];
 
 const COLS: Record<string, Col<Row>[]> = {
   pergame: [
-    { key: 'gs', label: 'GS' },
     { key: 'mpg', label: 'MIN', dp: 1, shade: true },
     { key: 'ppg', label: 'PTS', dp: 1, shade: true },
     { key: 'rpg', label: 'REB', dp: 1, shade: true },
@@ -34,13 +34,20 @@ const COLS: Record<string, Col<Row>[]> = {
     { key: 'spg', label: 'STL', dp: 1, shade: true },
     { key: 'bpg', label: 'BLK', dp: 1, shade: true },
     { key: 'topg', label: 'TOV', dp: 1, shade: true, lowerIsBetter: true },
+    { key: 'fgmpg', label: 'FGM', dp: 1, shade: true },
+    { key: 'fgapg', label: 'FGA', dp: 1 },
     { key: 'fgPct', label: 'FG%', dp: 1, shade: true },
+    { key: 'fg3mpg', label: '3PM', dp: 1, shade: true },
+    { key: 'fg3apg', label: '3PA', dp: 1 },
     { key: 'fg3Pct', label: '3P%', dp: 1, shade: true },
+    { key: 'ftmpg', label: 'FTM', dp: 1, shade: true },
+    { key: 'ftapg', label: 'FTA', dp: 1 },
     { key: 'ftPct', label: 'FT%', dp: 1, shade: true },
     { key: 'tsPct', label: 'TS%', dp: 1, shade: true, title: 'True shooting percentage' },
+    { key: 'dd', label: 'DD2', shade: true, plainZero: true, title: 'Double-doubles' },
+    { key: 'td', label: 'TD3', shade: true, plainZero: true, title: 'Triple-doubles' },
   ],
   totals: [
-    { key: 'gs', label: 'GS' },
     { key: 'min', label: 'MIN', dp: 0 },
     { key: 'pts', label: 'PTS', shade: true },
     { key: 'reb', label: 'REB', shade: true },
@@ -83,7 +90,7 @@ export default async function PlayersPage({
   const seasons = await prisma.season.findMany({ where: { active: true }, orderBy: { startYear: 'desc' } });
   const view = sp.view in COLS ? sp.view : 'pergame';
 
-  const rows = await prisma.playerStats.findMany({
+  const all = await prisma.playerStats.findMany({
     where: {
       season: { key: seasonKey },
       gp: { gte: Number(sp.minGp) || 1 },
@@ -107,6 +114,28 @@ export default async function PlayersPage({
     take: 700,
   });
 
+  // The NBA's rule: 70% of his own team's games (a traded player's last team).
+  // Typing a Min games number, or picking All players, sets the rule aside.
+  const teamGp = new Map(
+    (await prisma.teamStats.findMany({ where: { season: { key: seasonKey } }, select: { teamId: true, gp: true } }))
+      .map((t) => [t.teamId, t.gp]),
+  );
+  const most = Math.max(0, ...teamGp.values());
+  const qualified = !sp.minGp && sp.qual !== 'all';
+  const rows = qualified ? all.filter((r) => r.gp >= minGames(teamGp.get(r.teamId ?? -1) ?? most)) : all;
+
+  // Double- and triple-doubles come from game logs, which start in 2026-27;
+  // a season without logs shows dashes rather than zeros.
+  const doubles = await prisma.$queryRaw<{ playerId: number; dd: number; td: number }[]>`
+    SELECT l."playerId",
+      count(*) FILTER (WHERE (l.pts >= 10)::int + (l.reb >= 10)::int + (l.ast >= 10)::int + (l.stl >= 10)::int + (l.blk >= 10)::int >= 2)::int AS dd,
+      count(*) FILTER (WHERE (l.pts >= 10)::int + (l.reb >= 10)::int + (l.ast >= 10)::int + (l.stl >= 10)::int + (l.blk >= 10)::int >= 3)::int AS td
+    FROM player_game_logs l JOIN seasons s ON s.id = l."seasonId"
+    WHERE s.key = ${seasonKey}
+    GROUP BY l."playerId"`;
+  const byPlayer = new Map(doubles.map((d) => [d.playerId, d]));
+  const logged = doubles.length > 0;
+
   const data: Row[] = rows.map((r) => {
     const a = r.player.advancedStats[0];
     return {
@@ -117,6 +146,10 @@ export default async function PlayersPage({
       gp: r.gp, gs: r.gs,
       mpg: perGame(r.min, r.gp), ppg: r.ppg, rpg: r.rpg, apg: r.apg,
       spg: perGame(r.stl, r.gp), bpg: perGame(r.blk, r.gp), topg: perGame(r.tov, r.gp),
+      fgmpg: perGame(r.fgm, r.gp), fgapg: perGame(r.fga, r.gp), fg3mpg: perGame(r.fg3m, r.gp),
+      fg3apg: perGame(r.fg3a, r.gp), ftmpg: perGame(r.ftm, r.gp), ftapg: perGame(r.fta, r.gp),
+      dd: logged ? byPlayer.get(r.playerId)?.dd ?? 0 : null,
+      td: logged ? byPlayer.get(r.playerId)?.td ?? 0 : null,
       min: r.min, pts: r.pts, reb: r.reb, ast: r.ast, stl: r.stl, blk: r.blk, tov: r.tov,
       fgm: r.fgm, fga: r.fga, fg3m: r.fg3m, fg3a: r.fg3a, ftm: r.ftm, fta: r.fta,
       fgPct: r.fgPct, fg3Pct: r.fg3Pct, ftPct: r.ftPct, tsPct: r.tsPct, usgPct: r.usgPct,
@@ -130,7 +163,8 @@ export default async function PlayersPage({
     <div>
       <h1 className="mb-1 text-xl font-bold tracking-tight">Player Stats</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
-        {data.length} players in {seasonKey}. Click a column to sort; cells are shaded by percentile against
+        {data.length} {qualified ? 'qualified ' : ''}players in {seasonKey}
+        {qualified && <> (70% of their team&apos;s games: {minGames(most)} of {most})</>}. Click a column to sort; cells are shaded by percentile against
         everyone shown. A dash is a stat the league didn&apos;t keep yet that season.
       </p>
 
@@ -139,8 +173,12 @@ export default async function PlayersPage({
           fields={[
             { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
             { kind: 'text', name: 'q', label: 'Name', placeholder: 'Search' },
-            { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS },
+            { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS, logos: true },
             { kind: 'select', name: 'position', label: 'Position', options: POSITION_OPTIONS },
+            {
+              kind: 'select', name: 'qual', label: 'Players',
+              options: [{ value: '', label: 'Qualified' }, { value: 'all', label: 'All players' }],
+            },
             { kind: 'number', name: 'minGp', label: 'Min games', min: 0 },
           ]}
         />
@@ -152,6 +190,10 @@ export default async function PlayersPage({
         cols={[...LEAD, ...COLS[view]]}
         initialSort={view === 'advanced' ? 'per' : view === 'totals' ? 'pts' : 'ppg'}
         href={{ base: '/players', key: 'playerId' }}
+        photo="playerId"
+        ranked
+        firstPage={100}
+        tall
         filename={`players-${view}-${seasonKey}`}
       />
     </div>

@@ -92,7 +92,7 @@ export default async function TransactionsPage({
               options: years.map((y) => ({ value: seasonKey(y), label: seasonKey(y) })),
               defaultValue: seasonKey(year),
             },
-            { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS },
+            { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS, logos: true },
             {
               kind: 'select', name: 'type', label: 'Type',
               options: [{ value: '', label: 'All moves' }, ...Object.entries(TYPES).map(([value, label]) => ({ value, label }))],

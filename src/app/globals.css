@@ -149,6 +149,20 @@ body {
 .stat-table th[aria-sort='ascending']::after {
   content: '▴';
 }
+/* Sortable tables: a set width per stat column, so re-sorting (which swaps in
+   rows with longer or shorter values, or dashes) never resizes the table. The
+   first column takes whatever is left; a value wider than this still fits. */
+.stat-table th[aria-sort]:not(:first-child) {
+  width: 4rem;
+}
+/* Short label columns (team, position), ruled off from the numbers. */
+.stat-table .divide {
+  text-align: center;
+  border-left: 1px solid var(--line);
+}
+.stat-table .divide + :not(.divide) {
+  border-left: 1px solid var(--line);
+}
 
 .btn-ghost {
   border: 1px solid var(--line);

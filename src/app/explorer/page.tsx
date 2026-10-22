@@ -72,7 +72,7 @@ export default async function ExplorerPage({
             ],
           },
           { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
-          { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS },
+          { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS, logos: true },
           { kind: 'select', name: 'position', label: 'Position', options: POSITION_OPTIONS },
           { kind: 'number', name: 'minGp', label: 'Min games', min: 0 },
           {
