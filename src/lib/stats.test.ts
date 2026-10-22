@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
-  gamesBehind, tovPct, tsPct, uPer, usgPct, vorp, winPct, winShares,
+  gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
   careerAdvanced, careerTotals, minGames, percentileOf, pythagWins, scaledFloor, standings,
 } from './stats';
 import { ordinal } from './format';
@@ -266,5 +266,15 @@ assert.deepEqual(
   ['0th', '1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '50th', '100th', '101st', '111th'],
   'ordinals, including the teens',
 );
+
+// Win probability: even at tip-off bar the home edge, certain at the horn, and a
+// lead is worth more the less time is left.
+assert.ok(Math.abs(winProbability(0, 2880) - 0.574) < 0.01, 'home edge alone at tip-off');
+assert.equal(winProbability(3, 0), 1, 'home lead at the horn');
+assert.equal(winProbability(-1, 0), 0, 'home deficit at the horn');
+assert.equal(winProbability(0, 0), 0.5, 'tie at the horn: overtime');
+assert.ok(winProbability(-9, 2280) < 0.35 && winProbability(-9, 2280) > 0.2, 'down 9 late in the first');
+assert.ok(winProbability(5, 60) > winProbability(5, 1440), 'a lead late beats the same lead at half');
+assert.ok(Math.abs(winProbability(4, 600) + winProbability(-4, 600, -2.5) - 1) < 1e-6, 'symmetric');
 
 console.log('stats.ts: all checks passed');

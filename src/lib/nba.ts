@@ -94,6 +94,26 @@ export function benchReason(code: string | undefined) {
     .toLowerCase();
 }
 
+/** What `games.broadcast` holds: each outlet once, national first, the side in brackets for local ones. */
+export type Broadcast = { tv: string[]; radio: string[] };
+
+/** A schedule game's `broadcasters` block, cut down to names. */
+export function broadcastOf(b: any): Broadcast {
+  const names = (list: any[] | undefined, side = '') =>
+    (list ?? []).map((x) => `${x.broadcasterDisplay}${side}`).filter((n) => n.trim());
+  const uniq = (xs: string[]) => [...new Set(xs)];
+  return {
+    tv: uniq([
+      ...names(b?.nationalBroadcasters), ...names(b?.nationalOttBroadcasters),
+      ...names(b?.homeTvBroadcasters, ' (home)'), ...names(b?.awayTvBroadcasters, ' (away)'),
+    ]),
+    radio: uniq([
+      ...names(b?.nationalRadioBroadcasters),
+      ...names(b?.homeRadioBroadcasters, ' (home)'), ...names(b?.awayRadioBroadcasters, ' (away)'),
+    ]),
+  };
+}
+
 // --- Box score -> game logs --------------------------------------------------------
 
 export type LogRow = ReturnType<typeof logsFromBox>[number];

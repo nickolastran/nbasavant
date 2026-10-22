@@ -9,7 +9,7 @@ import { TEAMS } from '../../prisma/teams';
 import { fetchPlayoffs, fetchSeason, nn, type PlayerSeason, type TeamSeason } from './bref';
 import { shiftDay, todayEt } from './dates';
 import { matcher, resolvePlayer } from './identity';
-import { FEEDS, gameKind, inches, lineOf, logsFromBox, nbaJson, rowsOf, shotsFromPbp, topOf, type GameLeaders } from './nba';
+import { FEEDS, broadcastOf, gameKind, inches, lineOf, logsFromBox, nbaJson, rowsOf, shotsFromPbp, topOf, type GameLeaders } from './nba';
 import {
   LEAGUE_2024_25, boxPlusMinus, centerBpm, efgPct, playerDrtg, playerOrtg, tsPct, vorp,
   type BoxTotals, type SeasonLine, type TeamTotals,
@@ -329,7 +329,11 @@ export async function syncSchedule(db: PrismaClient) {
     // slots whose teams aren't decided yet all wait or stay out.
     if (!kind || kind === 'all-star' || !KNOWN_TEAMS.has(g.homeTeam.teamId) || !KNOWN_TEAMS.has(g.awayTeam.teamId)) continue;
     const prev = existing.get(g.gameId);
-    if (prev && g.gameStatus === 2) continue; // live: the live routes own it until the final
+    if (prev && g.gameStatus === 2) {
+      // Live: the live routes own it until the final. Only where to watch is filled in.
+      if (!prev.broadcast) changed.push({ gameCode: g.gameId, data: { broadcast: broadcastOf(g.broadcasters) } });
+      continue;
+    }
     const final = g.gameStatus === 3;
     const row = {
       date: new Date(`${String(g.gameDateEst).slice(0, 10)}T12:00:00Z`),
@@ -343,12 +347,14 @@ export async function syncSchedule(db: PrismaClient) {
         : g.postponedStatus === 'Y' ? 'Postponed' : String(g.gameStatusText).trim(),
       homeScore: final ? (g.homeTeam.score as number) : 0,
       awayScore: final ? (g.awayTeam.score as number) : 0,
+      broadcast: broadcastOf(g.broadcasters),
     };
     if (!prev) fresh.push({ gameCode: g.gameId, seasonId: season.id, ...row });
     else if (
       prev.date.getTime() !== row.date.getTime() || prev.status !== row.status || prev.label !== row.label ||
       prev.homeScore !== row.homeScore || prev.awayScore !== row.awayScore ||
-      prev.homeTeamId !== row.homeTeamId || prev.awayTeamId !== row.awayTeamId || prev.kind !== row.kind
+      prev.homeTeamId !== row.homeTeamId || prev.awayTeamId !== row.awayTeamId || prev.kind !== row.kind ||
+      JSON.stringify(prev.broadcast) !== JSON.stringify(row.broadcast)
     ) {
       changed.push({ gameCode: g.gameId, data: row });
     }

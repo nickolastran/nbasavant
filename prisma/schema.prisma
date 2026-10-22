@@ -260,6 +260,8 @@ model Game {
   awayLine   Int[]    @default([])
   /// Each side's top performer, `{ home, away }` of `{ playerId, name, pts, reb, ast }` (a `GameLeaders`).
   leaders    Json?
+  /// Where to watch and listen, from the NBA schedule: {"tv": ["ESPN"], "radio": ["SiriusXM", ...]}.
+  broadcast  Json?
 
   gameLogs PlayerGameLog[]
   shots    ShotData[]

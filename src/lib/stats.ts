@@ -268,6 +268,28 @@ export const pointsPerShot = (made: number, attempts: number, value: number) =>
 
 // --- Standings ------------------------------------------------------------
 
+/** Standard normal CDF (Abramowitz-Stegun 7.1.26, error < 1.5e-7). */
+function normalCdf(z: number) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2);
+  const erf = 1 - t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-(z * z) / 2);
+  return z >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
+}
+
+/**
+ * The home team's chance to win, 0-1, from the margin (home minus away) and
+ * the seconds left. Stern's model: the rest of a game is a random walk whose
+ * spread grows with the time left, about 13.5 points over a full 48 minutes,
+ * plus the home edge still to be earned. At the horn it's the scoreboard; a tie
+ * at the horn means overtime, a coin flip.
+ * ponytail: no team strength, so it's even at tip-off bar the home edge. Feed a
+ * pre-game spread into `homeEdge` if it should know who's better.
+ */
+export function winProbability(margin: number, secondsLeft: number, homeEdge = 2.5) {
+  if (secondsLeft <= 0) return margin > 0 ? 1 : margin < 0 ? 0 : 0.5;
+  const share = secondsLeft / 2880;
+  return normalCdf((margin + homeEdge * share) / (13.5 * Math.sqrt(share)));
+}
+
 /** Winning percentage. A team that hasn't played yet sits at .000, not NaN. */
 export const winPct = (w: number, l: number) => div(w, w + l);
 

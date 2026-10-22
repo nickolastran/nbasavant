@@ -120,10 +120,19 @@ export async function liveGame(gameCode: string, final: boolean) {
         text: att ? `${t.statistics[made]}-${t.statistics[att]}` : String(t.statistics[made] ?? '—'),
         pct: att && t.statistics[att] ? (t.statistics[made] / t.statistics[att]) * 100 : null,
       })),
-      /** Who didn't get in, and why, when the feed says. */
+      /** Who didn't get in, and why, when the feed says; `note` is the injury itself when one is listed. */
       inactive: (t.players as any[])
         .filter((p) => p.played !== '1')
-        .map((p) => ({ name: `${p.firstName} ${p.familyName}`.trim(), reason: benchReason(p.notPlayingReason) })),
+        .map((p) => ({
+          playerId: p.personId as number,
+          name: `${p.firstName} ${p.familyName}`.trim(),
+          reason: benchReason(p.notPlayingReason),
+          note: (p.notPlayingDescription as string) || null,
+        })),
+      /** The five on the floor right now (all five at the last whistle once it's final). */
+      onCourt: (t.players as any[]).filter((p) => p.oncourt === '1').map((p) => p.personId as number),
+      bonus: t.inBonus === '1',
+      timeouts: (t.timeoutsRemaining as number | undefined) ?? null,
     };
   };
   const home = team(box.homeTeam);
@@ -135,6 +144,8 @@ export async function liveGame(gameCode: string, final: boolean) {
     clock: box.gameStatus === 2 ? `${min}:${String(sec).padStart(2, '0')}` : '',
     period: box.period as number,
     arena: box.arena ? `${box.arena.arenaName}, ${box.arena.arenaCity}` : null,
+    officials: ((box.officials as any[]) ?? []).map((o) => o.name as string),
+    attendance: (box.attendance as number) || null,
     home,
     away,
     logs: logsFromBox(box).map((l) => ({ ...l, name: names.get(l.playerId) ?? '' })),

@@ -162,10 +162,10 @@ function ScoreCard({ g }: { g: Game }) {
       )}
 
       <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
-        <Link href={`/games/${g.id}#gamecast`} className="btn-ghost justify-center text-center uppercase tracking-[0.1em] no-underline">
+        <Link href={`/games/${g.id}`} className="btn-ghost justify-center text-center uppercase tracking-[0.1em] no-underline">
           Gamecast
         </Link>
-        <Link href={`/games/${g.id}#box`} className="btn-ghost justify-center text-center uppercase tracking-[0.1em] no-underline">
+        <Link href={`/games/${g.id}?tab=box`} className="btn-ghost justify-center text-center uppercase tracking-[0.1em] no-underline">
           Box score
         </Link>
       </div>
