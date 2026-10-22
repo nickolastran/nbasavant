@@ -10,7 +10,10 @@ import { fetchSeason, nn, type PlayerSeason, type TeamSeason } from './bref';
 import { shiftDay, todayEt } from './dates';
 import { matcher, resolvePlayer } from './identity';
 import { FEEDS, gameKind, inches, lineOf, logsFromBox, nbaJson, rowsOf, shotsFromPbp, topOf, type GameLeaders } from './nba';
-import { LEAGUE_2024_25, efgPct, playerDrtg, playerOrtg, tsPct, type BoxTotals, type TeamTotals } from './stats';
+import {
+  LEAGUE_2024_25, boxPlusMinus, centerBpm, efgPct, playerDrtg, playerOrtg, tsPct, vorp,
+  type BoxTotals, type TeamTotals,
+} from './stats';
 
 const KNOWN_TEAMS = new Set(TEAMS.map((t) => t.id));
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -22,16 +25,38 @@ export const chunked = async <T>(rows: T[], size: number, fn: (c: T[]) => Promis
 // --- Season totals (basketball-reference) -------------------------------------
 
 /**
- * Our ORtg/DRtg estimates need turnovers and offensive rebounds on both the
- * player and team side; before 1973-74 those weren't kept, so they stay null.
+ * Our ORtg/DRtg and BPM estimates need turnovers and offensive rebounds on both
+ * the player and team side; before 1973-74 those weren't kept, so they stay null.
  */
-function ratings(p: PlayerSeason['line'], t: TeamSeason | undefined) {
+function boxInputs(p: PlayerSeason['line'], t: TeamSeason | undefined) {
   const b = t?.box;
   const inputs = [p.min, p.tov, p.oreb, p.dreb, p.ast, p.stl, p.blk, b?.min, b?.tov, b?.oreb, t?.oppPts];
-  if (inputs.some((v) => v === null || v === undefined)) return { ortg: null, drtg: null };
-  const player = p as BoxTotals;
-  const team = { ...(b as BoxTotals), gp: t!.gp, oppPts: t!.oppPts! } as TeamTotals;
-  return { ortg: r1(playerOrtg(player, team, LEAGUE_2024_25)), drtg: r1(playerDrtg(player, team)) };
+  if (inputs.some((v) => v === null || v === undefined)) return null;
+  return { player: p as BoxTotals, team: { ...(b as BoxTotals), gp: t!.gp, oppPts: t!.oppPts! } as TeamTotals };
+}
+
+function ratings(p: PlayerSeason['line'], t: TeamSeason | undefined) {
+  const x = boxInputs(p, t);
+  if (!x) return { ortg: null, drtg: null };
+  return { ortg: r1(playerOrtg(x.player, x.team, LEAGUE_2024_25)), drtg: r1(playerDrtg(x.player, x.team)) };
+}
+
+/**
+ * Our BPM and VORP for every player with the inputs, by player id. BR leaves
+ * its own blank for the first weeks of a season; these stand in until it
+ * fills them (see stats.ts for how far off they can be).
+ */
+function estimates(rows: { id: number; teamId: number; line: PlayerSeason['line'] }[], byTeam: Map<number, TeamSeason>) {
+  const fits = rows.flatMap(({ id, teamId, line }) => {
+    const x = boxInputs(line, byTeam.get(teamId));
+    return x ? [{ id, ...x, ...boxPlusMinus(x.player, x.team, LEAGUE_2024_25), min: x.player.min }] : [];
+  });
+  return new Map(
+    centerBpm(fits).map((b, i) => {
+      const { id, player, team } = fits[i];
+      return [id, { obpm: r1(b.obpm), dbpm: r1(b.dbpm), bpm: r1(b.bpm), vorp: r1(vorp(b.bpm, player.min, team.min, team.gp)) }];
+    }),
+  );
 }
 
 /**
@@ -97,14 +122,17 @@ export async function writeSeason(
       usgPct: nn(adv?.usg_pct),
     };
   });
+  const est = estimates(rows, byTeam);
   const advanced = rows
     .filter((p) => p.adv)
     .map(({ id, teamId, line, adv: a }) => {
       const { ortg, drtg } = ratings(line, byTeam.get(teamId));
+      const e = est.get(id);
       return {
         playerId: id, seasonId,
         per: nn(a!.per), ows: nn(a!.ows), dws: nn(a!.dws), ws: nn(a!.ws), ws48: nn(a!.ws_per_48),
-        obpm: nn(a!.obpm), dbpm: nn(a!.dbpm), bpm: nn(a!.bpm), vorp: nn(a!.vorp),
+        obpm: nn(a!.obpm) ?? e?.obpm ?? null, dbpm: nn(a!.dbpm) ?? e?.dbpm ?? null,
+        bpm: nn(a!.bpm) ?? e?.bpm ?? null, vorp: nn(a!.vorp) ?? e?.vorp ?? null,
         astPct: nn(a!.ast_pct), rebPct: nn(a!.trb_pct), stlPct: nn(a!.stl_pct),
         blkPct: nn(a!.blk_pct), tovPct: nn(a!.tov_pct),
         ortg, drtg, netRtg: ortg !== null && drtg !== null ? r1(ortg - drtg) : null,

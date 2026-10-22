@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { getSeason, prisma } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
+import { Headshot } from '@/components/Headshot';
 import { TeamMark } from '@/components/TeamMark';
 import { ViewTabs } from '@/components/ViewTabs';
 import { fmt, perGame } from '@/lib/format';
@@ -13,20 +14,21 @@ export const revalidate = 60;
 
 type Line = {
   playerId: number; name: string; abbr: string; color: string; teamId: number | null; gp: number;
-  fga: number; fg3a: number | null; fta: number;
+  min: number | null; fga: number; fg3a: number | null; fta: number;
   ppg: number | null; rpg: number | null; apg: number | null; spg: number | null; bpg: number | null;
   tpm: number | null; fgPct: number | null; fg3Pct: number | null; ftPct: number | null;
   tsPct: number | null; efgPct: number | null; usgPct: number | null;
   per: number | null; ws: number | null; bpm: number | null; vorp: number | null;
 };
-type Stat = Exclude<keyof Line, 'playerId' | 'name' | 'abbr' | 'color' | 'teamId' | 'gp' | 'fga' | 'fg3a' | 'fta'>;
+type Stat = Exclude<keyof Line, 'playerId' | 'name' | 'abbr' | 'color' | 'teamId' | 'gp' | 'min' | 'fga' | 'fg3a' | 'fta'>;
 
 /**
  * Each board, and what it takes to be on it. Per-game and rate boards need
  * 70% of team games; rate boards also an attempt floor (the 82-game number,
- * prorated). Season totals (WS, VORP) rank everyone.
+ * prorated); PER and BPM a minutes floor (1000, about 12 a game), so a
+ * two-minute cameo can't top them. Season totals (WS, VORP) rank everyone.
  */
-const BOARDS: { key: Stat; label: string; unit?: string; total?: boolean; floor?: ['fga' | 'fg3a' | 'fta', number] }[] = [
+const BOARDS: { key: Stat; label: string; unit?: string; total?: boolean; floor?: ['min' | 'fga' | 'fg3a' | 'fta', number] }[] = [
   { key: 'ppg', label: 'Points' },
   { key: 'rpg', label: 'Rebounds' },
   { key: 'apg', label: 'Assists' },
@@ -39,8 +41,8 @@ const BOARDS: { key: Stat; label: string; unit?: string; total?: boolean; floor?
   { key: 'tsPct', label: 'True shooting %', unit: '%', floor: ['fga', 300] },
   { key: 'efgPct', label: 'Effective FG %', unit: '%', floor: ['fga', 300] },
   { key: 'usgPct', label: 'Usage %', unit: '%' },
-  { key: 'per', label: 'PER' },
-  { key: 'bpm', label: 'Box plus/minus' },
+  { key: 'per', label: 'PER', floor: ['min', 1000] },
+  { key: 'bpm', label: 'Box plus/minus', floor: ['min', 1000] },
   { key: 'ws', label: 'Win shares', total: true },
   { key: 'vorp', label: 'VORP', total: true },
 ];
@@ -87,7 +89,7 @@ export default async function LeadersPage({
     return {
       playerId: s.playerId, name: s.player.fullName, teamId: s.teamId, gp: s.gp,
       abbr: s.team?.abbreviation ?? '', color: s.team?.primaryColor ?? 'var(--mid)',
-      fga: s.fga, fg3a: s.fg3a, fta: s.fta,
+      min: s.min, fga: s.fga, fg3a: s.fg3a, fta: s.fta,
       ppg: s.ppg, rpg: s.rpg, apg: s.apg,
       spg: perGame(s.stl, s.gp), bpg: perGame(s.blk, s.gp), tpm: perGame(s.fg3m, s.gp),
       fgPct: s.fgPct, fg3Pct: s.fg3Pct, ftPct: s.ftPct, tsPct: s.tsPct, efgPct: s.efgPct, usgPct: s.usgPct,
@@ -129,7 +131,7 @@ export default async function LeadersPage({
       <h1 className="mb-1 text-xl font-bold tracking-tight">Stat Leaders</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
         {season?.key}. To qualify: {minGp} games ({teamGames ? '70% of team games so far' : 'no games yet'}); rate
-        boards also need their attempts, prorated to games played. Win shares and VORP are season totals and rank
+        boards also need their attempts, and PER and BPM their minutes, prorated to games played. Win shares and VORP are season totals and rank
         everyone.
       </p>
 
@@ -160,10 +162,15 @@ export default async function LeadersPage({
               </h2>
               <ol className="p-1">
                 {b.rows.map((r, i) => (
-                  <li key={r.playerId} className="flex items-baseline gap-2 px-2 py-1 text-sm">
+                  <li key={r.playerId} className="flex items-center gap-2 px-2 py-1 text-sm">
                     <span className="tnum w-4 text-right text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
                       {i + 1}
                     </span>
+                    <Headshot
+                      id={r.playerId}
+                      name=""
+                      className="h-6 w-6 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top"
+                    />
                     <Link href={`/players/${r.playerId}`} className="link flex-1 truncate">
                       {r.name}
                     </Link>
