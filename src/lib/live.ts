@@ -126,6 +126,7 @@ export async function liveGame(gameCode: string, final: boolean) {
         .map((p) => ({
           playerId: p.personId as number,
           name: `${p.firstName} ${p.familyName}`.trim(),
+          jersey: (p.jerseyNum as string) || null,
           reason: benchReason(p.notPlayingReason),
           note: (p.notPlayingDescription as string) || null,
         })),

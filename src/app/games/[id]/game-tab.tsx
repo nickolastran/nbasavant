@@ -24,6 +24,10 @@ export type GameInfo = {
   home: Team;
 };
 
+/** PG/SG -> G, SF/PF -> F; C, G and F stay. */
+const broad = (pos: string | null | undefined) =>
+  !pos ? null : pos.endsWith('G') ? 'G' : pos.endsWith('F') ? 'F' : pos.startsWith('C') ? 'C' : null;
+
 const periodName = (p: number) => (p <= 4 ? `Q${p}` : p === 5 ? 'OT' : `${p - 4}OT`);
 const pct = (m: number | null, a: number | null) => (m !== null && a ? (m / a) * 100 : null);
 
@@ -50,7 +54,7 @@ const muted = { color: 'var(--ink-3)' };
  */
 export async function GameTab({ game, data, standings }: { game: GameInfo; data: Live | null; standings: Standing[] }) {
   const ids = [game.away.id, game.home.id];
-  const [season, players, series] = await Promise.all([
+  const [season, players, series, roster] = await Promise.all([
     prisma.teamStats.findMany({ where: { seasonId: game.seasonId, teamId: { in: ids } } }),
     prisma.playerStats.findMany({
       where: { seasonId: game.seasonId, teamId: { in: ids } },
@@ -69,12 +73,17 @@ export async function GameTab({ game, data, standings }: { game: GameInfo; data:
       include: { homeTeam: true, awayTeam: true },
       orderBy: { date: 'asc' },
     }),
+    // Roster positions: the box score only gives starters their lineup slot.
+    data
+      ? prisma.player.findMany({ where: { id: { in: data.logs.map((l) => l.playerId) } }, select: { id: true, position: true } })
+      : [],
   ]);
+  const position = new Map(roster.map((p) => [p.id, broad(p.position)]));
 
   return (
     <div className="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)_19rem]">
       <div className="space-y-4">
-        {data && data.state !== 'pre' && <OnCourt game={game} data={data} />}
+        {data && data.state !== 'pre' && <OnCourt game={game} data={data} position={position} />}
         {data && data.state !== 'pre' && <WinChance game={game} data={data} />}
         <SeasonStats game={game} season={season} />
         <Info game={game} data={data} />
@@ -103,7 +112,7 @@ function TeamHead({ team }: { team: Team }) {
   );
 }
 
-function OnCourt({ game, data }: { game: GameInfo; data: Live }) {
+function OnCourt({ game, data, position }: { game: GameInfo; data: Live; position: Map<number, string | null> }) {
   const side = (team: Team, t: Live['home']) => {
     const five = data.logs.filter((l) => t.onCourt.includes(l.playerId));
     return (
@@ -131,7 +140,7 @@ function OnCourt({ game, data }: { game: GameInfo; data: Live }) {
                         {l.firstName.charAt(0)}. {l.lastName}
                       </Link>
                       <span className="text-[0.6875rem]" style={muted}>
-                        {[l.jersey && `#${l.jersey}`, l.position].filter(Boolean).join(' · ')}
+                        {[l.jersey && `#${l.jersey}`, position.get(l.playerId) ?? broad(l.position)].filter(Boolean).join(' · ')}
                       </span>
                     </span>
                   </span>

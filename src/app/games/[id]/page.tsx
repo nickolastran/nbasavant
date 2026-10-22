@@ -4,12 +4,12 @@ import { prisma } from '@/lib/db';
 import { AutoRefresh } from '@/components/AutoRefresh';
 import { PlayByPlay } from '@/components/PlayByPlay';
 import { ShotChart, type Shot } from '@/components/ShotChart';
-import { StatTable, type Col } from '@/components/StatTable';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
 import { seasonStandings, type Standing } from '@/lib/db';
 import { liveGame } from '@/lib/live';
 import type { Broadcast } from '@/lib/nba';
+import { TeamBox } from './box-score';
 import { GameTab, type GameInfo } from './game-tab';
 
 export const revalidate = 10;
@@ -59,7 +59,12 @@ const TABS = [
 
 function Tabs({ current }: { current: string }) {
   return (
-    <nav className="flex overflow-x-auto border-b" style={{ borderColor: 'var(--line)' }} aria-label="Game">
+    // Scrolls sideways on a phone, without a visible scrollbar (Windows drew one for the underline's 1px).
+    <nav
+      className="flex overflow-x-auto border-b [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={{ borderColor: 'var(--line)' }}
+      aria-label="Game"
+    >
       {TABS.map((t) => {
         const active = t.value === current;
         return (
@@ -196,23 +201,6 @@ function Header({
   );
 }
 
-const BOX_COLS = [
-  { key: 'name', label: 'Player' },
-  { key: 'role', label: '' },
-  { key: 'min', label: 'MIN', dp: 1 },
-  { key: 'pts', label: 'PTS', shade: true },
-  { key: 'reb', label: 'REB', shade: true },
-  { key: 'ast', label: 'AST', shade: true },
-  { key: 'stl', label: 'STL' },
-  { key: 'blk', label: 'BLK' },
-  { key: 'tov', label: 'TOV', lowerIsBetter: true },
-  { key: 'pf', label: 'PF', lowerIsBetter: true },
-  { key: 'fg', label: 'FG' },
-  { key: 'fg3', label: '3P' },
-  { key: 'ft', label: 'FT' },
-  { key: 'plusMinus', label: '+/-', shade: true },
-];
-
 async function NbaGame({ game, standings, tab }: { game: GameRow; standings: Standing[]; tab: string }) {
   const data = await liveGame(game.gameCode, game.status.startsWith('Final'));
   const live = data?.state === 'live';
@@ -233,15 +221,6 @@ async function NbaGame({ game, standings, tab }: { game: GameRow; standings: Sta
         }
       : { score: null };
 
-  const box = (teamId: number) =>
-    (data?.logs ?? [])
-      .filter((l) => l.teamId === teamId)
-      .sort((a, b) => Number(b.started) - Number(a.started) || b.min - a.min)
-      .map((l) => ({
-        playerId: l.playerId, name: l.name, role: l.started ? 'Starter' : '',
-        min: l.min, pts: l.pts, reb: l.reb, ast: l.ast, stl: l.stl, blk: l.blk, tov: l.tov, pf: l.pf,
-        fg: `${l.fgm}-${l.fga}`, fg3: `${l.fg3m}-${l.fg3a}`, ft: `${l.ftm}-${l.fta}`, plusMinus: l.plusMinus,
-      }));
   const waiting = (
     <p className="panel p-6 text-sm" style={{ color: 'var(--ink-2)' }}>
       The box score opens around tip-off.
@@ -264,35 +243,28 @@ async function NbaGame({ game, standings, tab }: { game: GameRow; standings: Sta
       {tab === '' && <GameTab game={info} data={data} standings={standings} />}
 
       {tab === 'box' &&
-        (!data
-          ? waiting
-          : [
+        (!data ? (
+          waiting
+        ) : (
+          <div className="panel space-y-5 p-4">
+            {[
               { t: data.away, team: game.awayTeam },
               { t: data.home, team: game.homeTeam },
             ].map(({ t, team }) => (
-              <section key={t.teamId}>
-                <h2 className="mb-2 flex items-center gap-2 text-lg font-bold tracking-tight">
-                  <TeamMark abbr={team.abbreviation} color={team.primaryColor} size={26} />
-                  {team.city} {team.name} <span className="tnum font-normal">{scored ? t.score : ''}</span>
-                </h2>
-                <StatTable
-                  empty="Nobody has checked in yet."
-                  rows={box(t.teamId)}
-                  cols={BOX_COLS as Col<ReturnType<typeof box>[number]>[]}
-                  initialSort="min"
-                  href={{ base: '/players', key: 'playerId' }}
-                  photo="playerId"
-                  tall
-                  filename={`box-${t.abbr}-${game.gameCode}`}
-                  pageSize={20}
-                />
-                {t.inactive.length > 0 && (
-                  <p className="mt-1 text-xs" style={{ color: 'var(--ink-3)' }}>
-                    Did not play: {t.inactive.map((p) => (p.reason ? `${p.name} (${p.reason})` : p.name)).join(', ')}
-                  </p>
-                )}
-              </section>
-            )))}
+              <TeamBox
+                key={t.teamId}
+                team={team}
+                lines={data.logs.filter((l) => l.teamId === t.teamId)}
+                benched={t.inactive}
+                final={data.state === 'final'}
+                onCourt={live ? t.onCourt : []}
+              />
+            ))}
+            <p className="text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
+              +/- is the team&apos;s net points while the player is on the court.
+            </p>
+          </div>
+        ))}
 
       {tab === 'pbp' &&
         (!data
@@ -351,8 +323,8 @@ async function NbaGame({ game, standings, tab }: { game: GameRow; standings: Sta
 async function PastGame({ game, standings }: { game: GameRow; standings: Standing[] }) {
   const logs = await prisma.playerGameLog.findMany({
     where: { gameId: game.id },
-    include: { player: { select: { id: true, fullName: true } } },
-    orderBy: { min: 'desc' },
+    include: { player: { select: { fullName: true, jersey: true } } },
+    orderBy: [{ started: 'desc' }, { min: 'desc' }],
   });
   return (
     <div className="space-y-6">
@@ -371,30 +343,21 @@ async function PastGame({ game, standings }: { game: GameRow; standings: Standin
           {game.season.key} seasons for their stats.
         </p>
       )}
-      {[game.awayTeam, game.homeTeam].map((t) => {
-        const rows = logs
-          .filter((l) => l.teamId === t.id)
-          .map((l) => ({
-            playerId: l.player.id, name: l.player.fullName, role: l.started ? 'Starter' : '',
-            min: l.min, pts: l.pts, reb: l.reb, ast: l.ast, stl: l.stl, blk: l.blk, tov: l.tov, pf: l.pf,
-            fg: `${l.fgm}-${l.fga}`, fg3: `${l.fg3m}-${l.fg3a}`, ft: `${l.ftm}-${l.fta}`, plusMinus: l.plusMinus,
-          }));
-        return rows.length ? (
-          <section key={t.id}>
-            <h2 className="mb-2 text-lg font-bold tracking-tight">
-              {t.city} {t.name}
-            </h2>
-            <StatTable
-              rows={rows}
-              cols={BOX_COLS as Col<(typeof rows)[number]>[]}
-              initialSort="min"
-              href={{ base: '/players', key: 'playerId' }}
-              filename={`box-${t.abbreviation}-${game.gameCode}`}
-              pageSize={20}
+      {logs.length > 0 && (
+        <div className="panel space-y-5 p-4">
+          {[game.awayTeam, game.homeTeam].map((t) => (
+            <TeamBox
+              key={t.id}
+              team={t}
+              lines={logs
+                .filter((l) => l.teamId === t.id)
+                .map((l) => ({ ...l, name: l.player.fullName, jersey: l.player.jersey }))}
+              benched={[]}
+              final
             />
-          </section>
-        ) : null;
-      })}
+          ))}
+        </div>
+      )}
     </div>
   );
 }
