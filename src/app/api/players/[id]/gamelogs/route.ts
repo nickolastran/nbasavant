@@ -18,16 +18,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       playerId: id,
       ...(season ? { season: { key: season } } : {}),
       ...(minPts ? { pts: { gte: minPts } } : {}),
-      ...(opponent
-        ? {
-            game: {
+      // Regular season only; preseason and playoff lines live on the game pages.
+      game: {
+        kind: 'regular',
+        ...(opponent
+          ? {
               OR: [
                 { homeTeam: { abbreviation: opponent } },
                 { awayTeam: { abbreviation: opponent } },
               ],
-            },
-          }
-        : {}),
+            }
+          : {}),
+      },
     },
     include: {
       game: {

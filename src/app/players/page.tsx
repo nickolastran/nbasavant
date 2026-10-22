@@ -89,36 +89,49 @@ export default async function PlayersPage({
   const seasonKey = sp.season || active?.key;
   const seasons = await prisma.season.findMany({ where: { active: true }, orderBy: { startYear: 'desc' } });
   const view = sp.view in COLS ? sp.view : 'pergame';
+  // Regular season lives in PlayerStats (+ AdvancedStats); playoffs and preseason in SplitStats.
+  const kind = sp.type === 'playoffs' || sp.type === 'preseason' ? sp.type : 'regular';
 
-  const all = await prisma.playerStats.findMany({
-    where: {
-      season: { key: seasonKey },
-      gp: { gte: Number(sp.minGp) || 1 },
-      // The team he played for that season, not the one he's on now.
-      ...(sp.team ? { team: { abbreviation: sp.team } } : {}),
-      player: {
-        ...(sp.q ? { fullName: { contains: sp.q, mode: 'insensitive' } } : {}),
-        ...(sp.position ? { position: sp.position } : {}),
-      },
+  const where = {
+    season: { key: seasonKey },
+    gp: { gte: Number(sp.minGp) || 1 },
+    // The team he played for that season, not the one he's on now.
+    ...(sp.team ? { team: { abbreviation: sp.team } } : {}),
+    player: {
+      ...(sp.q ? { fullName: { contains: sp.q, mode: 'insensitive' as const } } : {}),
+      ...(sp.position ? { position: sp.position } : {}),
     },
-    include: {
-      team: { select: { abbreviation: true } },
-      player: {
-        select: {
-          id: true, fullName: true, position: true,
-          advancedStats: { where: { season: { key: seasonKey } } },
-        },
-      },
-    },
-    orderBy: { ppg: 'desc' },
-    take: 700,
-  });
+  };
+  const include = {
+    team: { select: { abbreviation: true } },
+    player: { select: { id: true, fullName: true, position: true } },
+  };
+  type Adv = Partial<Record<'per' | 'astPct' | 'rebPct' | 'ows' | 'dws' | 'ws' | 'ws48' | 'obpm' | 'dbpm' | 'bpm' | 'vorp', number | null>>;
+  const regular = kind === 'regular'
+    ? await prisma.playerStats.findMany({
+        where,
+        include: { ...include, player: { select: { ...include.player.select, advancedStats: { where: { season: { key: seasonKey } } } } } },
+        orderBy: { ppg: 'desc' },
+        take: 700,
+      })
+    : [];
+  const split = kind === 'regular'
+    ? []
+    : await prisma.splitStats.findMany({ where: { ...where, kind }, include, orderBy: { ppg: 'desc' }, take: 700 });
+  const all = [
+    ...regular.map((r) => ({ ...r, adv: r.player.advancedStats[0] as Adv | undefined })),
+    ...split.map((r) => ({ ...r, adv: r as Adv })),
+  ];
 
   // The NBA's rule: 70% of his own team's games (a traded player's last team).
   // Typing a Min games number, or picking All players, sets the rule aside.
+  // Playoff and preseason team games aren't stored; a team's busiest player stands in.
   const teamGp = new Map(
-    (await prisma.teamStats.findMany({ where: { season: { key: seasonKey } }, select: { teamId: true, gp: true } }))
-      .map((t) => [t.teamId, t.gp]),
+    kind === 'regular'
+      ? (await prisma.teamStats.findMany({ where: { season: { key: seasonKey } }, select: { teamId: true, gp: true } }))
+          .map((t) => [t.teamId, t.gp])
+      : (await prisma.splitStats.groupBy({ by: ['teamId'], where: { season: { key: seasonKey }, kind }, _max: { gp: true } }))
+          .map((t) => [t.teamId ?? -1, t._max.gp ?? 0]),
   );
   const most = Math.max(0, ...teamGp.values());
   const qualified = !sp.minGp && sp.qual !== 'all';
@@ -130,14 +143,14 @@ export default async function PlayersPage({
     SELECT l."playerId",
       count(*) FILTER (WHERE (l.pts >= 10)::int + (l.reb >= 10)::int + (l.ast >= 10)::int + (l.stl >= 10)::int + (l.blk >= 10)::int >= 2)::int AS dd,
       count(*) FILTER (WHERE (l.pts >= 10)::int + (l.reb >= 10)::int + (l.ast >= 10)::int + (l.stl >= 10)::int + (l.blk >= 10)::int >= 3)::int AS td
-    FROM player_game_logs l JOIN seasons s ON s.id = l."seasonId"
-    WHERE s.key = ${seasonKey}
+    FROM player_game_logs l JOIN seasons s ON s.id = l."seasonId" JOIN games g ON g.id = l."gameId"
+    WHERE s.key = ${seasonKey} AND g.kind = ${kind}
     GROUP BY l."playerId"`;
   const byPlayer = new Map(doubles.map((d) => [d.playerId, d]));
   const logged = doubles.length > 0;
 
   const data: Row[] = rows.map((r) => {
-    const a = r.player.advancedStats[0];
+    const a = r.adv;
     return {
       playerId: r.playerId,
       player: r.player.fullName,
@@ -163,8 +176,9 @@ export default async function PlayersPage({
     <div>
       <h1 className="mb-1 text-xl font-bold tracking-tight">Player Stats</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
-        {data.length} {qualified ? 'qualified ' : ''}players in {seasonKey}
-        {qualified && <> (70% of their team&apos;s games: {minGames(most)} of {most})</>}. Click a column to sort; cells are shaded by percentile against
+        {data.length} {qualified ? 'qualified ' : ''}players in the {seasonKey}{' '}
+        {kind === 'regular' ? 'regular season' : kind}
+        {qualified && most > 0 && <> (70% of their team&apos;s games: {minGames(most)} of {most})</>}. Click a column to sort; cells are shaded by percentile against
         everyone shown. A dash is a stat the league didn&apos;t keep yet that season.
       </p>
 
@@ -172,6 +186,14 @@ export default async function PlayersPage({
         <FilterBar
           fields={[
             { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
+            {
+              kind: 'select', name: 'type', label: 'Season type',
+              options: [
+                { value: '', label: 'Regular season' },
+                { value: 'playoffs', label: 'Playoffs' },
+                { value: 'preseason', label: 'Preseason' },
+              ],
+            },
             { kind: 'text', name: 'q', label: 'Name', placeholder: 'Search' },
             { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS, logos: true },
             { kind: 'select', name: 'position', label: 'Position', options: POSITION_OPTIONS },
@@ -194,7 +216,12 @@ export default async function PlayersPage({
         ranked
         firstPage={100}
         tall
-        filename={`players-${view}-${seasonKey}`}
+        filename={`players-${kind}-${view}-${seasonKey}`}
+        empty={
+          kind === 'preseason' && (seasons.find((s) => s.key === seasonKey)?.startYear ?? 0) < 2026
+            ? 'Preseason stats start with 2026-27, the first season saved from NBA box scores.'
+            : undefined
+        }
       />
     </div>
   );

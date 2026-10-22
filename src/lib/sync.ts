@@ -6,13 +6,13 @@
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { TEAMS } from '../../prisma/teams';
-import { fetchSeason, nn, type PlayerSeason, type TeamSeason } from './bref';
+import { fetchPlayoffs, fetchSeason, nn, type PlayerSeason, type TeamSeason } from './bref';
 import { shiftDay, todayEt } from './dates';
 import { matcher, resolvePlayer } from './identity';
 import { FEEDS, gameKind, inches, lineOf, logsFromBox, nbaJson, rowsOf, shotsFromPbp, topOf, type GameLeaders } from './nba';
 import {
   LEAGUE_2024_25, boxPlusMinus, centerBpm, efgPct, playerDrtg, playerOrtg, tsPct, vorp,
-  type BoxTotals, type TeamTotals,
+  type BoxTotals, type SeasonLine, type TeamTotals,
 } from './stats';
 
 const KNOWN_TEAMS = new Set(TEAMS.map((t) => t.id));
@@ -57,6 +57,23 @@ function estimates(rows: { id: number; teamId: number; line: PlayerSeason['line'
       return [id, { obpm: r1(b.obpm), dbpm: r1(b.dbpm), bpm: r1(b.bpm), vorp: r1(vorp(b.bpm, player.min, team.min, team.gp)) }];
     }),
   );
+}
+
+/** The per-game and shooting rates stored beside a line, so tables can sort on them. */
+function rates(l: SeasonLine) {
+  const perGame = (v: number | null) => (v === null || !l.gp ? null : r1(v / l.gp));
+  const pct = (made: number | null, att: number | null) => (made !== null && att ? r1((made / att) * 100) : null);
+  return {
+    ppg: l.gp ? r1(l.pts / l.gp) : 0,
+    rpg: perGame(l.reb),
+    apg: perGame(l.ast),
+    fgPct: pct(l.fgm, l.fga),
+    fg3Pct: pct(l.fg3m, l.fg3a),
+    ftPct: pct(l.ftm, l.fta),
+    tsPct: l.fga + l.fta ? r1(tsPct(l)) : null,
+    // No three-point line before 1979-80: a missing 3PM is zero threes.
+    efgPct: l.fga ? r1(efgPct({ fgm: l.fgm, fg3m: l.fg3m ?? 0, fga: l.fga })) : null,
+  };
 }
 
 /**
@@ -105,23 +122,9 @@ export async function writeSeason(
     WHERE p.id = v.id AND v.name <> ''`;
 
   const byTeam = new Map(teams.map((t) => [t.teamId, t]));
-  const stats = rows.map(({ id, teamId, line: l, adv }) => {
-    const perGame = (v: number | null) => (v === null || !l.gp ? null : r1(v / l.gp));
-    const pct = (made: number | null, att: number | null) => (made !== null && att ? r1((made / att) * 100) : null);
-    return {
-      playerId: id, seasonId, teamId, ...l,
-      ppg: l.gp ? r1(l.pts / l.gp) : 0,
-      rpg: perGame(l.reb),
-      apg: perGame(l.ast),
-      fgPct: pct(l.fgm, l.fga),
-      fg3Pct: pct(l.fg3m, l.fg3a),
-      ftPct: pct(l.ftm, l.fta),
-      tsPct: l.fga + l.fta ? r1(tsPct(l)) : null,
-      // No three-point line before 1979-80: a missing 3PM is zero threes.
-      efgPct: l.fga ? r1(efgPct({ fgm: l.fgm, fg3m: l.fg3m ?? 0, fga: l.fga })) : null,
-      usgPct: nn(adv?.usg_pct),
-    };
-  });
+  const stats = rows.map(({ id, teamId, line: l, adv }) => ({
+    playerId: id, seasonId, teamId, ...l, ...rates(l), usgPct: nn(adv?.usg_pct),
+  }));
   const est = estimates(rows, byTeam);
   const advanced = rows
     .filter((p) => p.adv)
@@ -155,6 +158,76 @@ export async function writeSeason(
     db.advancedStats.createMany({ data: advanced }),
   ]);
   return { players: stats.length, advanced: advanced.length, teams: teamRows.length };
+}
+
+/**
+ * One season's playoff lines from BR, replacing what's stored. Every playoff
+ * player played that regular season, so his slug is already on file; one
+ * that somehow isn't is skipped rather than guessed.
+ */
+export async function writePlayoffs(db: PrismaClient, seasonId: number, players: PlayerSeason[]) {
+  const ids = new Map(
+    (await db.player.findMany({ where: { brSlug: { in: players.map((p) => p.slug) } }, select: { id: true, brSlug: true } }))
+      .map((p) => [p.brSlug!, p.id]),
+  );
+  const data = players
+    .filter((p) => ids.has(p.slug))
+    .map(({ slug, teamId, line: l, adv: a }) => ({
+      playerId: ids.get(slug)!, seasonId, kind: 'playoffs', teamId, ...l, ...rates(l),
+      usgPct: nn(a?.usg_pct), per: nn(a?.per), ows: nn(a?.ows), dws: nn(a?.dws), ws: nn(a?.ws),
+      ws48: nn(a?.ws_per_48), obpm: nn(a?.obpm), dbpm: nn(a?.dbpm), bpm: nn(a?.bpm), vorp: nn(a?.vorp),
+      astPct: nn(a?.ast_pct), rebPct: nn(a?.trb_pct),
+    }));
+  await db.$transaction([
+    db.splitStats.deleteMany({ where: { seasonId, kind: 'playoffs' } }),
+    db.splitStats.createMany({ data }),
+  ]);
+  return data.length;
+}
+
+/** The newest season's playoff lines, once a playoff game is final. Two requests. */
+export async function syncPlayoffs(db: PrismaClient) {
+  const season = await db.season.findFirst({ orderBy: { startYear: 'desc' } });
+  if (!season) return 'no seasons';
+  const started = await db.game.count({ where: { seasonId: season.id, kind: 'playoffs', status: { startsWith: 'Final' } } });
+  if (!started) return `${season.key} playoffs not started`;
+  const players = await fetchPlayoffs(season.endYear, { tries: 1 });
+  return `${season.key}: ${await writePlayoffs(db, season.id, players)} players`;
+}
+
+/**
+ * One season's preseason lines, summed from its box scores (BR keeps no
+ * preseason). Rebuilt whole each time: a preseason is a few hundred rows.
+ * Finals are saved several at once, so the rebuild holds a lock: each one
+ * reads the logs only after the last has written.
+ */
+export async function syncPreseason(db: PrismaClient, seasonId: number) {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${seasonId})`;
+    const logs = await tx.playerGameLog.findMany({
+      where: { seasonId, game: { kind: 'preseason' } },
+      orderBy: { date: 'asc' },
+    });
+    const sums = new Map<number, { teamId: number; line: SeasonLine }>();
+    for (const g of logs) {
+      const s = sums.get(g.playerId) ?? {
+        teamId: g.teamId,
+        line: { gp: 0, gs: 0, min: 0, pts: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, fgm: 0, fga: 0, fg3m: 0, fg3a: 0, ftm: 0, fta: 0 },
+      };
+      const l = s.line as Record<keyof SeasonLine, number>;
+      s.teamId = g.teamId; // in date order, so the last team wins
+      l.gp += 1;
+      l.gs += g.started ? 1 : 0;
+      for (const k of ['min', 'pts', 'reb', 'oreb', 'dreb', 'ast', 'stl', 'blk', 'tov', 'pf', 'fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta'] as const) l[k] += g[k];
+      sums.set(g.playerId, s);
+    }
+    const data = [...sums].map(([playerId, { teamId, line: l }]) => ({
+      playerId, seasonId, kind: 'preseason', teamId, ...l, ...rates(l),
+    }));
+    await tx.splitStats.deleteMany({ where: { seasonId, kind: 'preseason' } });
+    await tx.splitStats.createMany({ data });
+    return data.length;
+  });
 }
 
 /** The newest season's totals, once BR has any. Three requests. */
@@ -251,9 +324,9 @@ export async function syncSchedule(db: PrismaClient) {
 }
 
 /**
- * Save one finished game: final score, and for regular-season games the
- * player lines and every real shot. Anything else (preseason, playoffs) keeps
- * only its score here; its box score is always a click away on the game page.
+ * Save one finished game: final score and player lines, and for regular-season
+ * games every real shot (the shot charts are regular season). A preseason game
+ * also refreshes that preseason's totals.
  */
 export async function syncGame(db: PrismaClient, gameCode: string) {
   const game = await db.game.findUnique({ where: { gameCode } });
@@ -286,18 +359,19 @@ export async function syncGame(db: PrismaClient, gameCode: string) {
         leaders: { home: topOf(box.homeTeam), away: topOf(box.awayTeam) } satisfies GameLeaders,
       },
     }),
+    db.playerGameLog.deleteMany({ where }),
+    db.playerGameLog.createMany({
+      data: logs.map(({ firstName, lastName, jersey, position, ...l }) => ({ ...l, ...stamp })),
+      skipDuplicates: true,
+    }),
     ...(game.kind === 'regular'
       ? [
-          db.playerGameLog.deleteMany({ where }),
-          db.playerGameLog.createMany({
-            data: logs.map(({ firstName, lastName, jersey, position, ...l }) => ({ ...l, ...stamp })),
-            skipDuplicates: true,
-          }),
           db.shotData.deleteMany({ where }),
           db.shotData.createMany({ data: shotsFromPbp(pbp).map((s) => ({ ...s, ...stamp })), skipDuplicates: true }),
         ]
       : []),
   ]);
+  if (game.kind === 'preseason') await syncPreseason(db, game.seasonId);
   return `${gameCode}: ${logs.length} lines`;
 }
 
@@ -309,7 +383,7 @@ export async function syncFinals(db: PrismaClient) {
       status: { startsWith: 'Final' },
       OR: [
         { date: { gte: new Date(`${shiftDay(todayEt(), -3)}T00:00:00Z`) } },
-        { kind: 'regular', gameLogs: { none: {} } },
+        { gameLogs: { none: {} } },
       ],
     },
     select: { gameCode: true },
@@ -406,6 +480,7 @@ export async function runSync(db: PrismaClient) {
   };
   await step('schedule', () => syncSchedule(db));
   await step('finals', () => syncFinals(db));
+  await step('playoffs', () => syncPlayoffs(db));
   await step('rosters', () => syncRosters(db));
   await step('transactions', () => syncTransactions(db));
   await step('seasonTotals', () => syncSeasonTotals(db));

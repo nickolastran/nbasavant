@@ -111,7 +111,7 @@ export default async function PlayerPage({
       : [],
     season
       ? prisma.playerGameLog.findMany({
-          where: { playerId: id, seasonId: season.id },
+          where: { playerId: id, seasonId: season.id, game: { kind: 'regular' } },
           include: {
             game: { include: { homeTeam: { select: { abbreviation: true } }, awayTeam: { select: { abbreviation: true } } } },
           },

@@ -151,7 +151,7 @@ export function alignment(html: string) {
 export function seasonLine(r: Row): SeasonLine {
   return {
     gp: nn(r.games ?? r.g) ?? 0,
-    gs: nn(r.games_started),
+    gs: nn(r.games_started ?? r.gs),
     min: nn(r.mp),
     pts: nn(r.pts) ?? 0,
     reb: nn(r.trb),
@@ -260,7 +260,8 @@ export function parsePlayers(totals: string, advanced: string): PlayerSeason[] {
     else if (!prev) byPlayer.set(r._id, player(teamIdFor(abbr)));
     else prev.teamId = teamIdFor(abbr); // stints are listed in order: the last one wins
   }
-  for (const r of table(advanced, 'advanced').filter((r) => r._id)) {
+  // The league pages call it `advanced`, the playoff pages `advanced_stats`.
+  for (const r of [...table(advanced, 'advanced'), ...table(advanced, 'advanced_stats')].filter((r) => r._id)) {
     const p = byPlayer.get(r._id);
     const abbr = r.team_name_abbr || r._team || '';
     if (p && (isCombined(abbr) || !p.adv)) p.adv = r;
@@ -281,6 +282,14 @@ export async function fetchSeason(endYear: number, opts?: { tries?: number }) {
   const totals = await fetchPage(`/leagues/${path}_totals.html`, opts);
   const advanced = await fetchPage(`/leagues/${path}_advanced.html`, opts);
   return { teams, players: parsePlayers(totals, advanced), scheduleOnly };
+}
+
+/** One season's playoff totals and advanced (2 requests). Empty before the playoffs start. */
+export async function fetchPlayoffs(endYear: number, opts?: { tries?: number }) {
+  const path = seasonPath(endYear);
+  const totals = await fetchPage(`/playoffs/${path}_totals.html`, opts);
+  if (!totals) return [];
+  return parsePlayers(totals, await fetchPage(`/playoffs/${path}_advanced.html`, opts));
 }
 
 export type IndexedPlayer = {

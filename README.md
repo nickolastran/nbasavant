@@ -33,6 +33,7 @@ docker compose up -d db
 | `npm test` | Self-checks: stat formulas, standings, careers, the player matcher, the feed parsers |
 | `npm run ingest` | Wipe and load every season from basketball-reference, 1946-47 on |
 | `npm run sync` | The daily sync, by hand (same steps as the cron) |
+| `npm run playoffs -- --from 1947 --to 2026` | Playoff lines from basketball-reference, by season end year (the ingest doesn't load them) |
 | `npx prisma migrate deploy` | Apply migrations |
 | `npm run db:studio` | Prisma Studio |
 
@@ -94,14 +95,18 @@ A few things worth knowing:
 
 ## Keeping it current
 
-`/api/cron/sync` runs daily on Vercel (`vercel.json`, 10:00 UTC). It runs five steps, each on its own
+`/api/cron/sync` runs daily on Vercel (`vercel.json`, 10:00 UTC). It runs six steps, each on its own
 so one source being down doesn't stop the rest:
 
 1. **schedule**: new games (Cup knockouts and playoffs appear as they're set), moved tip-offs, finals
-2. **finals**: box scores and real shots for the last three days' games (catches stat corrections)
-3. **rosters**: who's on which team, numbers, bios, rookies before they've played
-4. **transactions**: the whole log, replaced
-5. **season totals**: this season's totals and advanced metrics from basketball-reference
+2. **finals**: box scores and real shots for the last three days' games (catches stat corrections).
+   Preseason and playoff games keep their box scores too; a preseason final also rebuilds that
+   preseason's totals
+3. **playoffs**: this season's playoff totals and advanced metrics from basketball-reference, once a
+   playoff game is final
+4. **rosters**: who's on which team, numbers, bios, rookies before they've played
+5. **transactions**: the whole log, replaced
+6. **season totals**: this season's totals and advanced metrics from basketball-reference
 
 On top of that, the live scoreboard saves a game the moment it sees it go final, so standings and game
 logs don't wait for the morning. Live data itself is never stored: the pages read it through

@@ -20,6 +20,7 @@ model Season {
   active    Boolean @default(false)
 
   playerStats   PlayerStats[]
+  splitStats    SplitStats[]
   advancedStats AdvancedStats[]
   teamStats     TeamStats[]
   games         Game[]
@@ -44,6 +45,7 @@ model Team {
   players      Player[]
   stats        TeamStats[]
   playerStats  PlayerStats[]
+  splitStats   SplitStats[]
   homeGames    Game[]          @relation("home")
   awayGames    Game[]          @relation("away")
   gameLogs     PlayerGameLog[]
@@ -79,6 +81,7 @@ model Player {
   team       Team?     @relation(fields: [teamId], references: [id])
 
   stats         PlayerStats[]
+  splitStats    SplitStats[]
   advancedStats AdvancedStats[]
   gameLogs      PlayerGameLog[]
   shots         ShotData[]
@@ -135,6 +138,67 @@ model PlayerStats {
   @@index([seasonId, ppg(sort: Desc)])
   @@index([seasonId, teamId])
   @@map("player_stats")
+}
+
+/// A player's playoff or preseason line: the same box totals as PlayerStats, plus
+/// the advanced metrics BR publishes for the playoffs (preseason has none). Kept
+/// apart from PlayerStats so everything reading that stays regular-season only.
+model SplitStats {
+  id       Int    @id @default(autoincrement())
+  playerId Int
+  seasonId Int
+  /// 'playoffs' (basketball-reference) or 'preseason' (summed from box scores)
+  kind     String
+  /// The team he finished it with.
+  teamId   Int?
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team     Team?  @relation(fields: [teamId], references: [id])
+
+  gp   Int
+  gs   Int?
+  min  Float?
+  pts  Int
+  reb  Int?
+  oreb Int?
+  dreb Int?
+  ast  Int?
+  stl  Int?
+  blk  Int?
+  tov  Int?
+  pf   Int?
+  fgm  Int
+  fga  Int
+  fg3m Int?
+  fg3a Int?
+  ftm  Int
+  fta  Int
+
+  ppg    Float
+  rpg    Float?
+  apg    Float?
+  fgPct  Float?
+  fg3Pct Float?
+  ftPct  Float?
+  tsPct  Float?
+  efgPct Float?
+  usgPct Float?
+
+  per    Float?
+  ows    Float?
+  dws    Float?
+  ws     Float?
+  ws48   Float?
+  obpm   Float?
+  dbpm   Float?
+  bpm    Float?
+  vorp   Float?
+  astPct Float?
+  rebPct Float?
+
+  @@unique([playerId, seasonId, kind])
+  @@index([seasonId, kind])
+  @@map("split_stats")
 }
 
 /// Published advanced metrics (PER, WS, BPM, VORP...) plus our ORtg/DRtg estimate.
