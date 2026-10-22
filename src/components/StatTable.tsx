@@ -43,6 +43,8 @@ type Props<T> = {
   tall?: boolean;
   /** A headshot beside the first column, by this key's NBA person id. */
   photo?: keyof T & string;
+  /** A team logo beside the first column, by this key's team abbreviation. */
+  teamLogo?: keyof T & string;
   /** Number the rows in the current sort, left of the first column. */
   ranked?: boolean;
   caption?: string;
@@ -51,7 +53,7 @@ type Props<T> = {
 };
 
 export function StatTable<T extends Record<string, any>>({
-  rows, cols, initialSort, href, filename = 'nba-savant', pageSize = 50, firstPage = pageSize, tall, photo, ranked, caption,
+  rows, cols, initialSort, href, filename = 'nba-savant', pageSize = 50, firstPage = pageSize, tall, photo, teamLogo, ranked, caption,
   empty = 'No players match these filters. Try widening the minimum games or clearing the team.',
 }: Props<T>) {
   const [sort, setSort] = useState<string>(initialSort ?? cols[1]?.key ?? cols[0].key);
@@ -182,6 +184,7 @@ export function StatTable<T extends Record<string, any>>({
                               {i + 1}
                             </span>
                           )}
+                          {teamLogo && <TeamMark abbr={row[teamLogo]} size={22} />}
                           {photo && (
                             <Headshot
                               id={row[photo]}

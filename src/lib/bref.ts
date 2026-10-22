@@ -284,12 +284,16 @@ export async function fetchSeason(endYear: number, opts?: { tries?: number }) {
   return { teams, players: parsePlayers(totals, advanced), scheduleOnly };
 }
 
-/** One season's playoff totals and advanced (2 requests). Empty before the playoffs start. */
+/**
+ * One season's playoffs: player totals and advanced, and the teams' totals and
+ * ratings (3 requests). Empty before the playoffs start.
+ */
 export async function fetchPlayoffs(endYear: number, opts?: { tries?: number }) {
   const path = seasonPath(endYear);
   const totals = await fetchPage(`/playoffs/${path}_totals.html`, opts);
-  if (!totals) return [];
-  return parsePlayers(totals, await fetchPage(`/playoffs/${path}_advanced.html`, opts));
+  if (!totals) return { players: [] as PlayerSeason[], teams: [] as TeamSeason[] };
+  const players = parsePlayers(totals, await fetchPage(`/playoffs/${path}_advanced.html`, opts));
+  return { players, teams: parseTeams(await fetchPage(`/playoffs/${path}.html`, opts)) };
 }
 
 export type IndexedPlayer = {

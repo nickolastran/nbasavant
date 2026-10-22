@@ -1,14 +1,16 @@
 /**
- * `npm run playoffs` — every season's playoff lines from basketball-reference
- * (totals and advanced, two requests a season, paced by bref.ts). The daily
- * sync keeps the current season's up to date once its playoffs start; this
+ * `npm run playoffs` — every season's playoff lines from basketball-reference,
+ * players and teams (three requests a season, paced by bref.ts). Also fills
+ * the regular-season team columns the original ingest didn't keep (personal
+ * fouls, defensive rebounds) from the league page, one more request. The daily
+ * sync keeps the current season's playoffs up to date once they start; this
  * fills in history. Re-running a season replaces it.
  *
  *   npm run playoffs                            # 2025-26
  *   npm run playoffs -- --from 1947 --to 2026   # seasons by end year
  */
 import { prisma } from '../src/lib/db';
-import { fetchPlayoffs } from '../src/lib/bref';
+import { fetchPage, fetchPlayoffs, parseTeams, seasonPath } from '../src/lib/bref';
 import { writePlayoffs } from '../src/lib/sync';
 
 const arg = (name: string, fallback: string) => {
@@ -25,8 +27,16 @@ async function main() {
   });
   for (const s of seasons) {
     try {
-      const players = await fetchPlayoffs(s.endYear);
-      console.log(`${s.key}: ${players.length ? `${await writePlayoffs(prisma, s.id, players)} players` : 'no playoffs'}`);
+      const league = parseTeams(await fetchPage(`/leagues/${seasonPath(s.endYear)}.html`));
+      await prisma.$transaction(
+        league.map((t) =>
+          prisma.teamStats.updateMany({ where: { teamId: t.teamId, seasonId: s.id }, data: { dreb: t.box.dreb, pf: t.box.pf } }),
+        ),
+      );
+      const playoffs = await fetchPlayoffs(s.endYear);
+      console.log(
+        `${s.key}: ${playoffs.players.length ? `${await writePlayoffs(prisma, s.id, playoffs)} players, ${playoffs.teams.length} teams` : 'no playoffs'}`,
+      );
     } catch (e) {
       console.error(`${s.key}: FAILED ${e instanceof Error ? e.message : e}`);
     }

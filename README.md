@@ -33,7 +33,7 @@ docker compose up -d db
 | `npm test` | Self-checks: stat formulas, standings, careers, the player matcher, the feed parsers |
 | `npm run ingest` | Wipe and load every season from basketball-reference, 1946-47 on |
 | `npm run sync` | The daily sync, by hand (same steps as the cron) |
-| `npm run playoffs -- --from 1947 --to 2026` | Playoff lines from basketball-reference, by season end year (the ingest doesn't load them) |
+| `npm run playoffs -- --from 1947 --to 2026` | Playoff lines from basketball-reference, players and teams, by season end year (the ingest doesn't load them); also fills regular-season team PF and DREB |
 | `npx prisma migrate deploy` | Apply migrations |
 | `npm run db:studio` | Prisma Studio |
 
@@ -102,8 +102,8 @@ so one source being down doesn't stop the rest:
 2. **finals**: box scores and real shots for the last three days' games (catches stat corrections).
    Preseason and playoff games keep their box scores too; a preseason final also rebuilds that
    preseason's totals
-3. **playoffs**: this season's playoff totals and advanced metrics from basketball-reference, once a
-   playoff game is final
+3. **playoffs**: this season's playoff totals and advanced metrics, players and teams, from
+   basketball-reference, once a playoff game is final
 4. **rosters**: who's on which team, numbers, bios, rookies before they've played
 5. **transactions**: the whole log, replaced
 6. **season totals**: this season's totals and advanced metrics from basketball-reference

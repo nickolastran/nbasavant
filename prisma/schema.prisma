@@ -23,6 +23,7 @@ model Season {
   splitStats    SplitStats[]
   advancedStats AdvancedStats[]
   teamStats     TeamStats[]
+  teamSplits    TeamSplitStats[]
   games         Game[]
   shots         ShotData[]
   gameLogs      PlayerGameLog[]
@@ -44,6 +45,7 @@ model Team {
 
   players      Player[]
   stats        TeamStats[]
+  teamSplits   TeamSplitStats[]
   playerStats  PlayerStats[]
   splitStats   SplitStats[]
   homeGames    Game[]          @relation("home")
@@ -385,6 +387,7 @@ model TeamStats {
   oppPts Int?
   reb    Int?
   oreb   Int?
+  dreb   Int?
   ast    Int?
   stl    Int?
   blk    Int?
@@ -395,6 +398,7 @@ model TeamStats {
   fg3a   Int?
   ftm    Int?
   fta    Int?
+  pf     Int?
 
   // Defensive rating allowed by opponent position, e.g. {"PG":112.4,...}
   drtgByPosition Json?
@@ -402,6 +406,59 @@ model TeamStats {
   @@unique([teamId, seasonId])
   @@index([seasonId, netRtg(sort: Desc)])
   @@map("team_stats")
+}
+
+/// A team's playoff or preseason line, the TeamStats columns minus alignment.
+/// Playoffs come from basketball-reference with its ratings; preseason is
+/// summed from box scores and has no ratings.
+model TeamSplitStats {
+  id       Int    @id @default(autoincrement())
+  teamId   Int
+  seasonId Int
+  /// 'playoffs' or 'preseason'
+  kind     String
+  team     Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  name   String?
+  gp     Int     @default(0)
+  wins   Int     @default(0)
+  losses Int     @default(0)
+
+  pace      Float?
+  ortg      Float?
+  drtg      Float?
+  netRtg    Float?
+  efgPct    Float?
+  tsPct     Float?
+  tovPct    Float?
+  orebPct   Float?
+  ftRate    Float?
+  oppEfgPct Float?
+  oppTovPct Float?
+  drebPct   Float?
+  sos       Float?
+
+  pts    Int?
+  oppPts Int?
+  reb    Int?
+  oreb   Int?
+  dreb   Int?
+  ast    Int?
+  stl    Int?
+  blk    Int?
+  tov    Int?
+  fgm    Int?
+  fga    Int?
+  fg3m   Int?
+  fg3a   Int?
+  ftm    Int?
+  fta    Int?
+  pf     Int?
+
+  @@unique([teamId, seasonId, kind])
+  @@index([seasonId, kind])
+  @@map("team_split_stats")
 }
 
 /// A signing, waiver, trade or conversion, as the NBA's transaction log lists

@@ -142,11 +142,7 @@ export async function writeSeason(
       };
     });
   const teamRows = teams.map((t) => ({
-    teamId: t.teamId, seasonId, name: t.name, conference: t.conference, division: t.division,
-    gp: t.gp, wins: t.wins, losses: t.losses, ...t.ratings,
-    pts: t.box.pts, oppPts: t.oppPts, reb: t.box.reb, oreb: t.box.oreb, ast: t.box.ast,
-    stl: t.box.stl, blk: t.box.blk, tov: t.box.tov, fgm: t.box.fgm, fga: t.box.fga,
-    fg3m: t.box.fg3m, fg3a: t.box.fg3a, ftm: t.box.ftm, fta: t.box.fta,
+    ...teamLine(t), seasonId, conference: t.conference, division: t.division,
   }));
 
   await db.$transaction([
@@ -160,12 +156,26 @@ export async function writeSeason(
   return { players: stats.length, advanced: advanced.length, teams: teamRows.length };
 }
 
+/** A team's record, ratings and totals, the columns TeamStats and TeamSplitStats share. */
+function teamLine(t: TeamSeason) {
+  const b = t.box;
+  return {
+    teamId: t.teamId, name: t.name, gp: t.gp, wins: t.wins, losses: t.losses, ...t.ratings,
+    pts: b.pts, oppPts: t.oppPts, reb: b.reb, oreb: b.oreb, dreb: b.dreb, ast: b.ast, stl: b.stl,
+    blk: b.blk, tov: b.tov, pf: b.pf, fgm: b.fgm, fga: b.fga, fg3m: b.fg3m, fg3a: b.fg3a, ftm: b.ftm, fta: b.fta,
+  };
+}
+
 /**
- * One season's playoff lines from BR, replacing what's stored. Every playoff
- * player played that regular season, so his slug is already on file; one
- * that somehow isn't is skipped rather than guessed.
+ * One season's playoff lines from BR, players and teams, replacing what's
+ * stored. Every playoff player played that regular season, so his slug is
+ * already on file; one that somehow isn't is skipped rather than guessed.
  */
-export async function writePlayoffs(db: PrismaClient, seasonId: number, players: PlayerSeason[]) {
+export async function writePlayoffs(
+  db: PrismaClient,
+  seasonId: number,
+  { players, teams }: { players: PlayerSeason[]; teams: TeamSeason[] },
+) {
   const ids = new Map(
     (await db.player.findMany({ where: { brSlug: { in: players.map((p) => p.slug) } }, select: { id: true, brSlug: true } }))
       .map((p) => [p.brSlug!, p.id]),
@@ -181,6 +191,8 @@ export async function writePlayoffs(db: PrismaClient, seasonId: number, players:
   await db.$transaction([
     db.splitStats.deleteMany({ where: { seasonId, kind: 'playoffs' } }),
     db.splitStats.createMany({ data }),
+    db.teamSplitStats.deleteMany({ where: { seasonId, kind: 'playoffs' } }),
+    db.teamSplitStats.createMany({ data: teams.map((t) => ({ ...teamLine(t), seasonId, kind: 'playoffs' })) }),
   ]);
   return data.length;
 }
@@ -191,13 +203,14 @@ export async function syncPlayoffs(db: PrismaClient) {
   if (!season) return 'no seasons';
   const started = await db.game.count({ where: { seasonId: season.id, kind: 'playoffs', status: { startsWith: 'Final' } } });
   if (!started) return `${season.key} playoffs not started`;
-  const players = await fetchPlayoffs(season.endYear, { tries: 1 });
-  return `${season.key}: ${await writePlayoffs(db, season.id, players)} players`;
+  return `${season.key}: ${await writePlayoffs(db, season.id, await fetchPlayoffs(season.endYear, { tries: 1 }))} players`;
 }
 
 /**
- * One season's preseason lines, summed from its box scores (BR keeps no
- * preseason). Rebuilt whole each time: a preseason is a few hundred rows.
+ * One season's preseason lines, players and teams, summed from its box scores
+ * (BR keeps no preseason). Rebuilt whole each time: a preseason is a few
+ * hundred rows. A team's line is its players' lines added up, so team
+ * rebounds (credited to no player) are left out, as box score totals do.
  * Finals are saved several at once, so the rebuild holds a lock: each one
  * reads the logs only after the last has written.
  */
@@ -226,6 +239,30 @@ export async function syncPreseason(db: PrismaClient, seasonId: number) {
     }));
     await tx.splitStats.deleteMany({ where: { seasonId, kind: 'preseason' } });
     await tx.splitStats.createMany({ data });
+
+    // Teams: box totals from the logs, games, record and points allowed from the scores.
+    const played = new Set(logs.map((g) => g.gameId));
+    const games = await tx.game.findMany({ where: { id: { in: [...played] } } });
+    const teams = new Map<number, Record<string, number>>();
+    const team = (id: number) => {
+      if (!teams.has(id)) teams.set(id, { gp: 0, wins: 0, losses: 0, pts: 0, oppPts: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, fgm: 0, fga: 0, fg3m: 0, fg3a: 0, ftm: 0, fta: 0 });
+      return teams.get(id)!;
+    };
+    for (const g of games) {
+      for (const [us, own, opp] of [[g.homeTeamId, g.homeScore, g.awayScore], [g.awayTeamId, g.awayScore, g.homeScore]]) {
+        const t = team(us);
+        t.gp += 1;
+        t[own > opp ? 'wins' : 'losses'] += 1;
+        t.pts += own;
+        t.oppPts += opp;
+      }
+    }
+    for (const g of logs) {
+      const t = team(g.teamId);
+      for (const k of ['reb', 'oreb', 'dreb', 'ast', 'stl', 'blk', 'tov', 'pf', 'fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta'] as const) t[k] += g[k];
+    }
+    await tx.teamSplitStats.deleteMany({ where: { seasonId, kind: 'preseason' } });
+    await tx.teamSplitStats.createMany({ data: [...teams].map(([teamId, t]) => ({ teamId, seasonId, kind: 'preseason', ...t })) });
     return data.length;
   });
 }
