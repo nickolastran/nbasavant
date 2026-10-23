@@ -17,8 +17,10 @@ export type LiveLeader = Leader;
 export type LiveGame = {
   gameCode: string;
   state: LiveState;
-  /** What a scoreboard prints: "Q3 5:21", "Half", "Final/OT", "7:30 pm ET". */
+  /** What a scoreboard prints: "3rd Qtr 5:21", "Half", "Final/OT", "7:30 pm ET". */
   status: string;
+  /** Scheduled tip-off, ISO UTC. */
+  start: string;
   period: number;
   home: LiveSide;
   away: LiveSide;
@@ -39,11 +41,19 @@ function side(t: any, leader: any): LiveSide {
   };
 }
 
+/** The feed's "1st Qtr" plus the time left in it; a stopped-at-zero clock (end of a quarter, half) adds nothing. */
+function withClock(g: any) {
+  const status = String(g.gameStatusText).trim();
+  const { min, sec } = clockParts(g.gameClock);
+  if (g.gameStatus !== 2 || !(min || sec) || /\d:\d\d/.test(status)) return status;
+  return `${status} ${min}:${String(sec).padStart(2, '0')}`;
+}
+
 /** Today's slate by the NBA's own calendar, or null when the feed can't be reached. */
 export async function liveScoreboard(): Promise<{ date: string; games: LiveGame[] } | null> {
   let board: any;
   try {
-    board = (await nbaJson(FEEDS.scoreboard, 10)).scoreboard;
+    board = (await nbaJson(FEEDS.scoreboard, 5)).scoreboard;
   } catch (e) {
     console.error('live scoreboard unavailable:', e instanceof Error ? e.message : e);
     return null;
@@ -51,7 +61,8 @@ export async function liveScoreboard(): Promise<{ date: string; games: LiveGame[
   const games: LiveGame[] = (board.games as any[]).map((g) => ({
     gameCode: g.gameId,
     state: STATE[g.gameStatus] ?? 'pre',
-    status: String(g.gameStatusText).trim(),
+    status: withClock(g),
+    start: g.gameTimeUTC,
     period: g.period ?? 0,
     home: side(g.homeTeam, g.gameLeaders?.homeLeaders),
     away: side(g.awayTeam, g.gameLeaders?.awayLeaders),

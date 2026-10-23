@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { legacyId, matcher, normName, resolvePlayer } from './identity';
 import { benchReason, clockParts, gameKind, inches, lineOf, logsFromBox, minutesPlayed, playsFromPbp, shotsFromPbp, topOf } from './nba';
 import { alignment, cupFinal, nn, pctOf, seasonLine, seasonPath, teamIdFor } from './bref';
-import { localTip, shiftDay, todayEt } from './dates';
+import { localTip, shiftDay, tipAt, todayEt } from './dates';
 import { displayName, rowsFromWords, type Word } from './injuries';
 
 const near = (a: number, b: number, eps: number, msg: string) =>
@@ -251,6 +251,7 @@ assert.equal(localTip('2026-10-21', '7:30 pm ET', 'America/Los_Angeles'), '4:30 
 assert.equal(localTip('2027-01-15', '10:00 pm ET', 'Europe/London'), '3:00 am GMT', 'standard time, crosses midnight');
 assert.equal(localTip('2027-01-15', '12:00 pm ET', 'America/New_York'), '12:00 pm EST', 'noon');
 assert.equal(localTip('2027-01-15', 'Final/OT'), 'Final/OT', 'non-times pass through');
+assert.equal(tipAt('2026-10-23', '10:00 pm ET')?.toISOString(), '2026-10-24T02:00:00.000Z', 'a late tip sorts after an early one');
 assert.equal(shiftDay('2026-10-31', 1), '2026-11-01', 'next day across a month');
 assert.equal(shiftDay('2026-11-01', -1), '2026-10-31', 'previous day');
 

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DatePicker } from '@/components/DatePicker';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
-import { shiftDay, todayEt } from '@/lib/dates';
+import { shiftDay, tipAt, todayEt } from '@/lib/dates';
 import type { LiveGame, LiveLeader, LiveState } from '@/lib/live';
 
 export type Game = {
@@ -30,6 +30,8 @@ export type Game = {
   /** Filled in from the live feed, for today's games only. */
   state?: LiveState;
   period?: number;
+  /** Scheduled tip-off, ISO UTC, from the live feed. */
+  start?: string;
   /** Points by period, OT included: the live feed for today, the box score for finals (2026-27 on). */
   homeLine?: number[];
   awayLine?: number[];
@@ -46,6 +48,7 @@ function merge(g: Game, l: LiveGame | undefined): Game {
     ...g,
     state: l.state,
     status: l.status,
+    start: l.start,
     period: l.period,
     homeLine: l.home.periods,
     awayLine: l.away.periods,
@@ -61,7 +64,7 @@ function merge(g: Game, l: LiveGame | undefined): Game {
 /**
  * The day's cards with the live feed laid over them. The feed keeps its own
  * calendar (last night's late games stay on it past midnight ET), so it decides
- * which day is live, not the clock. Polls every 15 s while a game is on, every
+ * which day is live, not the clock. Polls every 5 s while a game is on, every
  * minute before tip-off (to catch it), not at all once everything is final or
  * the feed has moved past this day — and never while the tab is hidden.
  */
@@ -85,7 +88,7 @@ export function useLive(games: Game[], date: string) {
             if (stopped || board.date > date) return;
             if (board.date === date) {
               setLive(Object.fromEntries(board.games.map((g) => [g.gameCode, g])));
-              if (board.games.some((g) => g.state === 'live')) next = 15_000;
+              if (board.games.some((g) => g.state === 'live')) next = 5_000;
               else if (board.games.every((g) => g.state === 'final')) return;
             }
           }
@@ -102,7 +105,14 @@ export function useLive(games: Game[], date: string) {
     };
   }, [recent, date, games]);
 
-  return games.map((g) => merge(g, live[g.gameCode]));
+  // Finals drop to the end; within each group, earliest tip-off first, so a finished day reads in the order it was played.
+  // Past finals have no time on record and keep the database's order.
+  // ponytail: no tip-off column, so a past day isn't sorted; store gameTimeUTC in sync if that matters.
+  const tip = (g: Game) => (g.start ? Date.parse(g.start) : tipAt(g.date, g.status)?.getTime()) ?? Infinity;
+  const done = (g: Game) => Number(stateOf(g) === 'final');
+  return games
+    .map((g) => merge(g, live[g.gameCode]))
+    .sort((a, b) => done(a) - done(b) || tip(a) - tip(b) || 0);
 }
 
 export function GameCard({ g }: { g: Game }) {
