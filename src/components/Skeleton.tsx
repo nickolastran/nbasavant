@@ -116,3 +116,27 @@ export function PageSkeleton({
     </div>
   );
 }
+
+/** A top-5 leader board: header, five player rows (logo, headshot, name, value), the footer link. */
+export function BoardSkeleton() {
+  return (
+    <div className="panel overflow-hidden">
+      <div className="border-b px-3 py-2.5" style={{ borderColor: 'var(--line)' }}>
+        <Bone width="8rem" className="h-2.5" />
+      </div>
+      {WIDTHS.slice(0, 5).map((w, i) => (
+        <div key={i} className="flex items-center gap-2 border-b px-3 py-1.5" style={{ borderColor: 'var(--line)' }}>
+          <Bone className="h-[18px] w-[18px] rounded-full" />
+          <Bone className="h-6 w-6 rounded-full" />
+          <span className="flex-1">
+            <Bone width={w} />
+          </span>
+          <Bone width="2.5rem" />
+        </div>
+      ))}
+      <div className="flex justify-center py-2.5">
+        <Bone width="6rem" className="h-2" />
+      </div>
+    </div>
+  );
+}

@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { prisma, getSeason } from '@/lib/db';
 import { Headshot } from '@/components/Headshot';
-import { LeaderRail, type RailBoard } from '@/components/LeaderRail';
+import { LeaderRail, RailSkeleton, type RailBoard } from '@/components/LeaderRail';
+import { Bone } from '@/components/Skeleton';
 import { ShotChart, type Shot } from '@/components/ShotChart';
 import { TeamMark } from '@/components/TeamMark';
 import { fmt } from '@/lib/format';
@@ -22,7 +24,16 @@ const MODULES = [
   { href: '/injuries', title: 'Injury report', body: "Who's out, who's questionable, and why, from the league's own report." },
 ];
 
-export default async function Home() {
+/** Streams: the skeleton paints at once and the page fills in when its queries land. */
+export default function Home() {
+  return (
+    <Suspense fallback={<HomeSkeleton />}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+async function HomeContent() {
   const season = await getSeason();
   if (!season) return <EmptyState />;
 
@@ -149,7 +160,7 @@ export default async function Home() {
                   <li key={l.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                     <TeamMark abbr={l.team.abbreviation} color={l.team.primaryColor} size={18} />
                     <Headshot id={l.playerId} name="" className="h-6 w-6 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top" />
-                    <Link href={`/players/${l.playerId}`} className="link min-w-0 flex-1 truncate">
+                    <Link href={`/players/${l.playerId}`} className="link min-w-0 flex-1 truncate" style={{ color: 'var(--ink)' }}>
                       {l.player.fullName}
                     </Link>
                     <Link href={`/games/${l.gameId}`} className="tnum no-underline hover:underline" style={{ color: 'var(--ink-2)' }}>
@@ -191,7 +202,7 @@ export default async function Home() {
                 <li key={t.teamId} className="flex items-center gap-3 py-2">
                   <span className="eyebrow w-4 tnum">{i + 1}</span>
                   <TeamMark abbr={t.team.abbreviation} color={t.team.primaryColor} size={22} />
-                  <Link href={`/teams/${t.team.abbreviation}`} className="link flex-1 text-sm font-medium">
+                  <Link href={`/teams/${t.team.abbreviation}`} className="link flex-1 text-sm font-medium" style={{ color: 'var(--ink)' }}>
                     {t.name ?? `${t.team.city} ${t.team.name}`}
                   </Link>
                   <span className="tnum text-sm">
@@ -276,6 +287,75 @@ function EmptyState() {
         Run <code>npm run ingest</code> to load every season since 1946-47 from basketball-reference, then{' '}
         <code>npm run sync</code> for the current season from the NBA&apos;s feeds.
       </p>
+    </div>
+  );
+}
+
+/** The page's shape while it loads: both rails, the middle column, the shot chart and its two panels, the tool cards. */
+function HomeSkeleton() {
+  const rows = (n: number, h = 'py-3') =>
+    Array.from({ length: n }, (_, i) => (
+      <div key={i} className={`flex items-center gap-3 px-4 ${h}`}>
+        <Bone width={['72%', '58%', '84%', '64%', '48%', '78%'][i % 6]} />
+      </div>
+    ));
+  return (
+    <div className="space-y-8" role="status" aria-live="polite">
+      <span className="sr-only">Loading…</span>
+      <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="space-y-3 md:col-span-2 xl:order-2 xl:col-span-1">
+          <Bone width="6rem" className="h-2.5" />
+          <Bone width="85%" className="h-8" />
+          <Bone width="60%" className="h-8" />
+          <Bone width="95%" className="mt-2" />
+          <Bone width="80%" />
+          <div className="panel mt-5 divide-y" style={{ borderColor: 'var(--line)' }}>
+            {rows(5, 'py-5')}
+          </div>
+          <div className="grid grid-cols-2 gap-2 pt-6 sm:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="panel space-y-2 px-3 py-3">
+                <Bone width="3rem" className="h-2" />
+                <Bone width="4rem" className="h-6" />
+              </div>
+            ))}
+          </div>
+          <div className="panel mt-6 divide-y" style={{ borderColor: 'var(--line)' }}>
+            {rows(4)}
+          </div>
+        </div>
+        <RailSkeleton className="xl:order-1" />
+        <RailSkeleton className="xl:order-3" />
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
+        <div className="space-y-2">
+          <Bone width="18rem" className="h-6" />
+          <Bone width="90%" />
+          <Bone width="70%" />
+          {/* The chart panel: header, the half court (500 by 470), the legend. */}
+          <span aria-hidden className="skeleton mt-3 aspect-[500/580] w-full rounded-md" />
+        </div>
+        <div className="space-y-4">
+          {[5, 6].map((n) => (
+            <div key={n} className="panel divide-y p-0" style={{ borderColor: 'var(--line)' }}>
+              <div className="px-4 py-3">
+                <Bone width="7rem" />
+              </div>
+              {rows(n)}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="panel space-y-2 p-4">
+            <Bone width="7rem" />
+            <Bone width="90%" className="h-2.5" />
+          </div>
+        ))}
+      </section>
     </div>
   );
 }

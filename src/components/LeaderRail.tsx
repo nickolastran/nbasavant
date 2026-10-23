@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Headshot } from '@/components/Headshot';
+import { BoardSkeleton, Bone } from '@/components/Skeleton';
 import { TeamMark } from '@/components/TeamMark';
 
 export type RailBoard = {
@@ -17,7 +18,7 @@ export type RailBoard = {
 /**
  * A column of top-5 boards, three of `boards` picked at random on every visit.
  * The server can't pick (the page is cached for a minute), so the first paint
- * is hidden and the browser deals the boards once it mounts.
+ * is skeleton boards and the browser deals the real ones once it mounts.
  */
 export function LeaderRail({ heading, boards, className = '' }: { heading: string; boards: RailBoard[]; className?: string }) {
   const [shown, setShown] = useState<RailBoard[] | null>(null);
@@ -27,10 +28,11 @@ export function LeaderRail({ heading, boards, className = '' }: { heading: strin
     setShown(pool.map((b) => ({ b, r: Math.random() })).sort((x, y) => x.r - y.r).slice(0, 3).map((x) => x.b));
   }, [boards]);
 
+  if (!shown) return <RailSkeleton className={className} />;
   return (
-    <div className={`space-y-3 transition-opacity duration-300 ${className}`} style={{ opacity: shown ? 1 : 0 }}>
+    <div className={`space-y-3 ${className}`}>
       <p className="eyebrow">{heading}</p>
-      {(shown ?? boards.slice(0, 3)).map((b) => (
+      {shown.map((b) => (
         <section key={b.key} className="panel overflow-hidden">
           <h2 className="eyebrow border-b px-3 py-2" style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}>
             {b.label}
@@ -48,7 +50,7 @@ export function LeaderRail({ heading, boards, className = '' }: { heading: strin
                 </span>
                 <TeamMark abbr={r.abbr} color={r.color} size={18} />
                 <Headshot id={r.playerId} name="" className="h-6 w-6 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top" />
-                <Link href={`/players/${r.playerId}`} className="link flex-1 truncate">
+                <Link href={`/players/${r.playerId}`} className="link flex-1 truncate" style={{ color: 'var(--ink)' }}>
                   {r.name}
                 </Link>
                 <span className="tnum font-semibold">{r.value}</span>
@@ -64,6 +66,18 @@ export function LeaderRail({ heading, boards, className = '' }: { heading: strin
             Complete list →
           </Link>
         </section>
+      ))}
+    </div>
+  );
+}
+
+/** A rail while it loads: the heading and three boards. */
+export function RailSkeleton({ className = '' }: { className?: string }) {
+  return (
+    <div className={`space-y-3 ${className}`} aria-hidden>
+      <Bone width="9rem" className="h-2.5" />
+      {[0, 1, 2].map((i) => (
+        <BoardSkeleton key={i} />
       ))}
     </div>
   );
