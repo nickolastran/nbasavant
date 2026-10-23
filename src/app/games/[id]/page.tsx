@@ -10,6 +10,7 @@ import { liveGame } from '@/lib/live';
 import type { Broadcast } from '@/lib/nba';
 import { TeamBox } from './box-score';
 import { GameTab, type GameInfo } from './game-tab';
+import { TeamStats } from './team-stats';
 
 export const revalidate = 10;
 
@@ -283,34 +284,7 @@ async function NbaGame({ game, standings, tab }: { game: GameRow; standings: Sta
         ))}
 
       {tab === 'team' &&
-        (!scored
-          ? waiting
-          : (
-              <div className="panel overflow-x-auto">
-                <table className="stat-table">
-                  <thead>
-                    <tr>
-                      <th style={{ cursor: 'default' }}>Stat</th>
-                      <th style={{ cursor: 'default' }}>{data.away.abbr}</th>
-                      <th style={{ cursor: 'default' }}>{data.home.abbr}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.away.stats.map((s, i) => {
-                      const h = data.home.stats[i];
-                      const show = (x: typeof s) => (x.pct === null ? x.text : `${x.text} (${x.pct.toFixed(1)}%)`);
-                      return (
-                        <tr key={s.label}>
-                          <td>{s.label}</td>
-                          <td>{show(s)}</td>
-                          <td>{show(h)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ))}
+        (!scored || !data ? waiting : <TeamStats data={data} away={game.awayTeam} home={game.homeTeam} />)}
     </div>
   );
 }

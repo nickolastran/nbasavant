@@ -132,6 +132,8 @@ export async function liveGame(gameCode: string, final: boolean) {
         })),
       /** The five on the floor right now (all five at the last whistle once it's final). */
       onCourt: (t.players as any[]).filter((p) => p.oncourt === '1').map((p) => p.personId as number),
+      /** The box score's team numbers as the NBA sends them, for the Team stats tab. */
+      totals: t.statistics as Record<string, number | string>,
       bonus: t.inBonus === '1',
       timeouts: (t.timeoutsRemaining as number | undefined) ?? null,
     };
