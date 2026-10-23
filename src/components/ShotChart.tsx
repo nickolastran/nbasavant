@@ -15,6 +15,8 @@ type Mode = 'hex' | 'scatter';
 /** League points-per-shot; the midpoint the diverging color scale pivots on. */
 const LEAGUE_PPS = 1.08;
 const HEX_R = 17;
+/** FullCourt's floor colour. */
+const WOOD = 'color-mix(in oklab, var(--hardwood) 38%, var(--panel))';
 
 /** Cube-round an axial hex coordinate. */
 function hexBin(x: number, y: number, r: number) {
@@ -60,11 +62,14 @@ export function ShotChart({
   title,
   subtitle,
   height = 520,
+  floor = false,
 }: {
   shots: Shot[];
   title?: string;
   subtitle?: string;
   height?: number;
+  /** The play-by-play look: hardwood and shaded paint, cut at the half-court line. */
+  floor?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>('hex');
   const [hover, setHover] = useState<{ x: number; y: number; lines: string[] } | null>(null);
@@ -127,8 +132,9 @@ export function ShotChart({
       <div className="relative">
         <svg
           ref={svgRef}
-          viewBox={`${COURT.minX} ${-COURT.maxY} ${COURT.width} ${COURT.height}`}
-          style={{ width: '100%', height, display: 'block', background: 'var(--panel)' }}
+          viewBox={floor ? '-250 -417.5 500 470' : `${COURT.minX} ${-COURT.maxY} ${COURT.width} ${COURT.height}`}
+          // The floor version is cut at half court and keeps the court's shape, so it sizes by width.
+          style={floor ? { width: '100%', height: 'auto', display: 'block' } : { width: '100%', height, display: 'block', background: 'var(--panel)' }}
           role="img"
           aria-label={`${shots.length} shot attempts plotted on a half court${title ? ` for ${title}` : ''}`}
           onMouseLeave={() => setHover(null)}
@@ -140,6 +146,12 @@ export function ShotChart({
             </clipPath>
           </defs>
           <g transform="scale(1,-1)">
+            {floor && (
+              <>
+                <rect x={-250} y={-52.5} width={500} height={470} fill={WOOD} />
+                <rect x={-80} y={-52.5} width={160} height={190} fill="color-mix(in oklab, var(--hardwood) 22%, transparent)" />
+              </>
+            )}
             <CourtLines />
 
             <g clipPath="url(#court-clip)">

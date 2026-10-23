@@ -1,44 +1,35 @@
 import Link from 'next/link';
 import { prisma, getSeason } from '@/lib/db';
+import { Headshot } from '@/components/Headshot';
+import { LeaderRail, type RailBoard } from '@/components/LeaderRail';
 import { ShotChart, type Shot } from '@/components/ShotChart';
+import { TeamMark } from '@/components/TeamMark';
+import { fmt } from '@/lib/format';
+import { isPerGame, leaderBoards, type Stat } from '@/lib/leaders';
 
 export const revalidate = 60;
 
-const LEADER_CATS = [
-  { key: 'ppg', label: 'Points per game', fmt: (v: number) => v.toFixed(1) },
-  { key: 'rpg', label: 'Rebounds per game', fmt: (v: number) => v.toFixed(1) },
-  { key: 'apg', label: 'Assists per game', fmt: (v: number) => v.toFixed(1) },
-  { key: 'tsPct', label: 'True shooting %', fmt: (v: number) => `${v.toFixed(1)}%`, minFga: 150 },
-  { key: 'usgPct', label: 'Usage %', fmt: (v: number) => `${v.toFixed(1)}%` },
-] as const;
+/** The hero's two flanks, three boards each dealt at random: box score on the left, advanced on the right. */
+const STANDARD: Stat[] = ['ppg', 'rpg', 'apg', 'spg', 'bpg', 'tpm', 'fgPct', 'fg3Pct', 'ftPct'];
+const ADVANCED: Stat[] = ['tsPct', 'efgPct', 'usgPct', 'per', 'bpm', 'ws', 'vorp'];
+
+/** The middle column's index of the site, beyond the four tools at the bottom. */
+const MODULES = [
+  { href: '/scores', title: 'Scores', body: 'Live line scores, box scores, play-by-play and win probability.' },
+  { href: '/leaders', title: 'Stat leaders', body: 'Box score and advanced boards for any season, qualified the league’s way.' },
+  { href: '/standings', title: 'Standings', body: 'Conference, division and NBA Cup tables, updated after every final.' },
+  { href: '/team-stats', title: 'Team stats', body: 'Offensive, defensive and net rating for all thirty teams, per 100 possessions.' },
+  { href: '/injuries', title: 'Injury report', body: "Who's out, who's questionable, and why, from the league's own report." },
+];
 
 export default async function Home() {
   const season = await getSeason();
   if (!season) return <EmptyState />;
 
-  const [leaders, games, topTeams, shots, totals] = await Promise.all([
-    Promise.all(
-      LEADER_CATS.map(async (c) => ({
-        ...c,
-        rows: await prisma.playerStats.findMany({
-          where: {
-            seasonId: season.id,
-            gp: { gte: 10 },
-            ...('minFga' in c && c.minFga ? { fga: { gte: c.minFga } } : {}),
-          },
-          // A stat nobody kept yet is null, and Postgres sorts those first unless
-          // told otherwise (ppg is never null, and Prisma rejects the option there).
-          orderBy: c.key === 'ppg' ? { ppg: 'desc' } : { [c.key]: { sort: 'desc', nulls: 'last' } },
-          take: 5,
-          include: {
-            team: { select: { abbreviation: true } },
-            player: { select: { id: true, fullName: true } },
-          },
-        }),
-      })),
-    ),
+  const [{ boards, teamStats }, games, topTeams, shots, totals, finals, best] = await Promise.all([
+    leaderBoards(season.id, 5),
     prisma.game.findMany({
-      where: { seasonId: season.id },
+      where: { seasonId: season.id, status: { startsWith: 'Final' } },
       orderBy: { date: 'desc' },
       take: 6,
       include: {
@@ -59,13 +50,124 @@ export default async function Home() {
       FROM shot_data WHERE "seasonId" = ${season.id} AND id % 6 = 0
       LIMIT 9000`,
     prisma.shotData.aggregate({ where: { seasonId: season.id }, _count: { _all: true } }),
+    prisma.game.count({ where: { seasonId: season.id, kind: { not: 'preseason' }, status: { startsWith: 'Final' } } }),
+    // The top scorers on the latest day anyone played.
+    prisma.playerGameLog
+      .findFirst({ where: { seasonId: season.id }, orderBy: { date: 'desc' }, select: { date: true } })
+      .then((last) =>
+        last
+          ? prisma.playerGameLog.findMany({
+              where: { seasonId: season.id, date: last.date },
+              orderBy: [{ pts: 'desc' }, { reb: 'desc' }],
+              take: 3,
+              include: {
+                player: { select: { fullName: true } },
+                team: { select: { abbreviation: true, primaryColor: true } },
+              },
+            })
+          : [],
+      ),
   ]);
+
+  // League averages: the mean of every team that has played.
+  const played = teamStats.filter((t) => t.gp > 0);
+  const avg = (of: (t: (typeof played)[number]) => number | null) => {
+    const v = played.map(of).filter((x): x is number => x !== null);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  };
+  const tiles = [
+    { label: 'Games', value: finals.toLocaleString() },
+    { label: 'Pts / game', value: fmt(avg((t) => (t.pts === null ? null : t.pts / t.gp))) },
+    { label: 'Pace', value: fmt(avg((t) => t.pace)) },
+    { label: 'TS%', value: fmt(avg((t) => t.tsPct), 1, '%') },
+  ];
+
+  const rail = (keys: Stat[]): RailBoard[] =>
+    boards
+      .filter((b) => keys.includes(b.key))
+      .map((b) => ({
+        key: b.key,
+        label: b.label,
+        note: isPerGame(b) ? 'per game' : '',
+        empty: b.tracked ? 'No qualifiers yet.' : `Not tracked in ${season.key}.`,
+        rows: b.rows.map((r) => ({ playerId: r.playerId, name: r.name, abbr: r.abbr, color: r.color, value: fmt(r[b.key], 1, b.unit) })),
+      }));
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+      <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="md:col-span-2 xl:order-2 xl:col-span-1">
+          <p className="eyebrow">{season.key} season</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">Every game, every shot, every number.</h1>
+          <p className="mt-2 max-w-prose text-sm" style={{ color: 'var(--ink-2)' }}>
+            Live scores and box scores, standings, leaderboards and player and team pages, built from the
+            NBA&apos;s own feeds and basketball-reference. The boards on either side change every visit.
+          </p>
+
+          <ol className="panel mt-5 divide-y" style={{ borderColor: 'var(--line)' }}>
+            {MODULES.map((m, i) => (
+              <li key={m.href}>
+                <Link
+                  href={m.href}
+                  className="flex items-start gap-3 px-4 py-3 no-underline transition-colors hover:bg-[var(--panel-2)]"
+                  style={{ color: 'var(--ink)' }}
+                >
+                  <span className="eyebrow tnum w-5 pt-0.5">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">{m.title}</span>
+                    <span className="mt-0.5 block text-xs" style={{ color: 'var(--ink-2)' }}>
+                      {m.body}
+                    </span>
+                  </span>
+                  <span aria-hidden className="pt-0.5 text-sm" style={{ color: 'var(--accent)' }}>
+                    →
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+
+          <p className="eyebrow mt-6">League averages</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {tiles.map((t) => (
+              <div key={t.label} className="panel px-3 py-2.5">
+                <div className="eyebrow">{t.label}</div>
+                <div className="tnum mt-1 text-2xl font-bold tracking-tight">{t.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {best.length > 0 && (
+            <>
+              <p className="eyebrow mt-6">
+                Best games ·{' '}
+                {best[0].date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+              </p>
+              <ol className="panel mt-2 divide-y" style={{ borderColor: 'var(--line)' }}>
+                {best.map((l) => (
+                  <li key={l.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                    <TeamMark abbr={l.team.abbreviation} color={l.team.primaryColor} size={18} />
+                    <Headshot id={l.playerId} name="" className="h-6 w-6 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top" />
+                    <Link href={`/players/${l.playerId}`} className="link min-w-0 flex-1 truncate">
+                      {l.player.fullName}
+                    </Link>
+                    <Link href={`/games/${l.gameId}`} className="tnum no-underline hover:underline" style={{ color: 'var(--ink-2)' }}>
+                      <strong style={{ color: 'var(--ink)' }}>{l.pts}</strong> pts · {l.reb} reb · {l.ast} ast
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </div>
+
+        <LeaderRail heading={`${season.key} leaders`} boards={rail(STANDARD)} className="xl:order-1" />
+        <LeaderRail heading={`${season.key} advanced`} boards={rail(ADVANCED)} className="xl:order-3" />
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Where the {season.key} league shoots</h1>
+          <h2 className="text-2xl font-bold tracking-tight">Where the {season.key} league shoots</h2>
           <p className="mt-1 max-w-prose text-sm" style={{ color: 'var(--ink-2)' }}>
             Every attempt binned by location and colored by points per shot — red beats the league
             average from that spot, blue trails it. This is the same chart every player and team page
@@ -76,7 +178,7 @@ export default async function Home() {
               shots={shots}
               title="League shot profile"
               subtitle={`${totals._count._all.toLocaleString()} attempts · sampled for speed`}
-              height={460}
+              floor
             />
           </div>
         </div>
@@ -119,30 +221,6 @@ export default async function Home() {
             </ul>
           </Panel>
         </div>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-lg font-bold tracking-tight">Season leaders</h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {leaders.map((cat) => (
-            <div key={cat.key} className="panel p-3">
-              <div className="eyebrow mb-2">{cat.label}</div>
-              <ol className="space-y-1.5">
-                {cat.rows.map((r, i) => (
-                  <li key={r.id} className="flex items-baseline gap-2 text-sm">
-                    <span className="eyebrow w-3 tnum">{i + 1}</span>
-                    <Link href={`/players/${r.player.id}`} className="link flex-1 truncate">
-                      {r.player.fullName}
-                    </Link>
-                    <span className="eyebrow">{r.team?.abbreviation}</span>
-                    <span className="tnum font-semibold">{cat.fmt(r[cat.key] as number)}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ))}
-        </div>
-        <p className="eyebrow mt-2">Minimum 10 games; true shooting also requires 150 attempts.</p>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

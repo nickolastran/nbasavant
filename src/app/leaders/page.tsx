@@ -5,47 +5,13 @@ import { FilterBar } from '@/components/FilterBar';
 import { Headshot } from '@/components/Headshot';
 import { TeamMark } from '@/components/TeamMark';
 import { ViewTabs } from '@/components/ViewTabs';
-import { fmt, perGame } from '@/lib/format';
+import { fmt } from '@/lib/format';
+import { isPerGame, leaderBoards, rank, type Stat } from '@/lib/leaders';
 import { seasonOptions } from '@/lib/options';
-import { minGames, scaledFloor } from '@/lib/stats';
+import { minGames } from '@/lib/stats';
 
 export const metadata = { title: 'Stat Leaders' };
 export const revalidate = 60;
-
-type Line = {
-  playerId: number; name: string; abbr: string; color: string; teamId: number | null; gp: number;
-  min: number | null; fga: number; fg3a: number | null; fta: number;
-  ppg: number | null; rpg: number | null; apg: number | null; spg: number | null; bpg: number | null;
-  tpm: number | null; fgPct: number | null; fg3Pct: number | null; ftPct: number | null;
-  tsPct: number | null; efgPct: number | null; usgPct: number | null;
-  per: number | null; ws: number | null; bpm: number | null; vorp: number | null;
-};
-type Stat = Exclude<keyof Line, 'playerId' | 'name' | 'abbr' | 'color' | 'teamId' | 'gp' | 'min' | 'fga' | 'fg3a' | 'fta'>;
-
-/**
- * Each board, and what it takes to be on it. Per-game and rate boards need
- * 70% of team games; rate boards also an attempt floor (the 82-game number,
- * prorated); PER and BPM a minutes floor (1000, about 12 a game), so a
- * two-minute cameo can't top them. Season totals (WS, VORP) rank everyone.
- */
-const BOARDS: { key: Stat; label: string; unit?: string; total?: boolean; floor?: ['min' | 'fga' | 'fg3a' | 'fta', number] }[] = [
-  { key: 'ppg', label: 'Points' },
-  { key: 'rpg', label: 'Rebounds' },
-  { key: 'apg', label: 'Assists' },
-  { key: 'spg', label: 'Steals' },
-  { key: 'bpg', label: 'Blocks' },
-  { key: 'tpm', label: 'Threes made' },
-  { key: 'fgPct', label: 'Field goal %', unit: '%', floor: ['fga', 300] },
-  { key: 'fg3Pct', label: 'Three-point %', unit: '%', floor: ['fg3a', 100] },
-  { key: 'ftPct', label: 'Free throw %', unit: '%', floor: ['fta', 100] },
-  { key: 'tsPct', label: 'True shooting %', unit: '%', floor: ['fga', 300] },
-  { key: 'efgPct', label: 'Effective FG %', unit: '%', floor: ['fga', 300] },
-  { key: 'usgPct', label: 'Usage %', unit: '%' },
-  { key: 'per', label: 'PER', floor: ['min', 1000] },
-  { key: 'bpm', label: 'Box plus/minus', floor: ['min', 1000] },
-  { key: 'ws', label: 'Win shares', total: true },
-  { key: 'vorp', label: 'VORP', total: true },
-];
 
 const TEAM_CATS: { key: Stat; label: string }[] = [
   { key: 'ppg', label: 'PTS' }, { key: 'rpg', label: 'REB' }, { key: 'apg', label: 'AST' },
@@ -71,49 +37,7 @@ export default async function LeadersPage({
   const season = seasons.find((s) => s.key === sp.season) ?? active;
   const view = sp.view === 'teams' ? 'teams' : 'players';
 
-  const [stats, teamStats] = season
-    ? await Promise.all([
-        prisma.playerStats.findMany({
-          where: { seasonId: season.id },
-          include: {
-            player: { select: { fullName: true, advancedStats: { where: { seasonId: season.id } } } },
-            team: { select: { abbreviation: true, primaryColor: true } },
-          },
-        }),
-        prisma.teamStats.findMany({ where: { seasonId: season.id }, include: { team: true } }),
-      ])
-    : [[], []];
-
-  const lines: Line[] = stats.map((s) => {
-    const a = s.player.advancedStats[0];
-    return {
-      playerId: s.playerId, name: s.player.fullName, teamId: s.teamId, gp: s.gp,
-      abbr: s.team?.abbreviation ?? '', color: s.team?.primaryColor ?? 'var(--mid)',
-      min: s.min, fga: s.fga, fg3a: s.fg3a, fta: s.fta,
-      ppg: s.ppg, rpg: s.rpg, apg: s.apg,
-      spg: perGame(s.stl, s.gp), bpg: perGame(s.blk, s.gp), tpm: perGame(s.fg3m, s.gp),
-      fgPct: s.fgPct, fg3Pct: s.fg3Pct, ftPct: s.ftPct, tsPct: s.tsPct, efgPct: s.efgPct, usgPct: s.usgPct,
-      per: a?.per ?? null, ws: a?.ws ?? null, bpm: a?.bpm ?? null, vorp: a?.vorp ?? null,
-    };
-  });
-
-  const teamGames = Math.max(0, ...teamStats.map((t) => t.gp), ...lines.map((l) => l.gp));
-  const minGp = Number(sp.minGp) || minGames(teamGames);
-  const rank = (pool: Line[], key: Stat) =>
-    pool.filter((l) => l[key] !== null).sort((a, b) => (b[key] as number) - (a[key] as number));
-
-  const boards = BOARDS.map((b) => ({
-    ...b,
-    tracked: lines.some((l) => l[b.key] !== null),
-    rows: rank(
-      lines.filter(
-        (l) =>
-          (b.total || l.gp >= minGp) &&
-          (!b.floor || (l[b.floor[0]] ?? 0) >= scaledFloor(b.floor[1], teamGames)),
-      ),
-      b.key,
-    ).slice(0, 10),
-  }));
+  const { lines, teamStats, teamGames, minGp, boards } = await leaderBoards(season?.id, 10, Number(sp.minGp));
 
   // Each team's best qualified player per category; if nobody on a team
   // qualifies yet, its best player regardless.
@@ -131,7 +55,7 @@ export default async function LeadersPage({
       <h1 className="mb-1 text-xl font-bold tracking-tight">Stat Leaders</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
         {season?.key}. To qualify: {minGp} games ({teamGames ? '70% of team games so far' : 'no games yet'}); rate
-        boards also need their attempts, and PER and BPM their minutes, prorated to games played. Win shares and VORP are season totals and rank
+        boards also need their attempts, and usage, PER and BPM their minutes, prorated to games played. Win shares and VORP are season totals and rank
         everyone.
       </p>
 
@@ -154,7 +78,7 @@ export default async function LeadersPage({
                 style={{ borderColor: 'var(--line)' }}
               >
                 {b.label}
-                {!b.total && !b.unit && b.key !== 'per' && b.key !== 'bpm' && (
+                {isPerGame(b) && (
                   <span className="ml-1 font-normal normal-case tracking-normal" style={{ color: 'var(--ink-3)' }}>
                     per game
                   </span>
