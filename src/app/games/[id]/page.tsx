@@ -10,6 +10,7 @@ import { liveGame } from '@/lib/live';
 import type { Broadcast } from '@/lib/nba';
 import { TeamBox } from './box-score';
 import { GameTab, type GameInfo } from './game-tab';
+import { Tabs, TabPanel } from './tabs';
 import { TeamStats } from './team-stats';
 
 export const revalidate = 10;
@@ -56,33 +57,6 @@ const TABS = [
   { value: 'pbp', label: 'Play-by-play' },
   { value: 'team', label: 'Team stats' },
 ];
-
-function Tabs({ current }: { current: string }) {
-  return (
-    // Scrolls sideways on a phone, without a visible scrollbar (Windows drew one for the underline's 1px).
-    <nav
-      className="flex overflow-x-auto border-b [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      style={{ borderColor: 'var(--line)' }}
-      aria-label="Game"
-    >
-      {TABS.map((t) => {
-        const active = t.value === current;
-        return (
-          <Link
-            key={t.value}
-            href={t.value ? `?tab=${t.value}` : '?'}
-            aria-current={active ? 'page' : undefined}
-            scroll={false}
-            className="-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-[0.6875rem] font-semibold uppercase tracking-[0.08em] no-underline"
-            style={{ borderColor: active ? 'var(--ink)' : 'transparent', color: active ? 'var(--ink)' : 'var(--ink-2)' }}
-          >
-            {t.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
 
 type Side = { score: number | null; periods?: number[]; bonus?: boolean; timeouts?: number | null };
 
@@ -238,53 +212,55 @@ async function NbaGame({ game, standings, tab }: { game: GameRow; standings: Sta
         status={data?.status ?? game.status}
         live={live}
       />
-      <Tabs current={tab} />
+      <Tabs tabs={TABS} current={tab} />
+      <TabPanel tab={tab}>
 
-      {tab === '' && <GameTab game={info} data={data} standings={standings} />}
+        {tab === '' && <GameTab game={info} data={data} standings={standings} />}
 
-      {tab === 'box' &&
-        (!data ? (
-          waiting
-        ) : (
-          <div className="panel space-y-5 p-4">
-            {[
-              { t: data.away, team: game.awayTeam },
-              { t: data.home, team: game.homeTeam },
-            ].map(({ t, team }) => (
-              <TeamBox
-                key={t.teamId}
-                team={team}
-                lines={data.logs.filter((l) => l.teamId === t.teamId)}
-                benched={t.inactive}
-                final={data.state === 'final'}
-                onCourt={live ? t.onCourt : []}
-              />
-            ))}
-            <p className="text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
-              +/- is the team&apos;s net points while the player is on the court.
-            </p>
-          </div>
-        ))}
+        {tab === 'box' &&
+          (!data ? (
+            waiting
+          ) : (
+            <div className="panel space-y-5 p-4">
+              {[
+                { t: data.away, team: game.awayTeam },
+                { t: data.home, team: game.homeTeam },
+              ].map(({ t, team }) => (
+                <TeamBox
+                  key={t.teamId}
+                  team={team}
+                  lines={data.logs.filter((l) => l.teamId === t.teamId)}
+                  benched={t.inactive}
+                  final={data.state === 'final'}
+                  onCourt={live ? t.onCourt : []}
+                />
+              ))}
+              <p className="text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
+                +/- is the team&apos;s net points while the player is on the court.
+              </p>
+            </div>
+          ))}
 
-      {tab === 'pbp' &&
-        (!data ? (
-          waiting
-        ) : (
-          <GamePlays
-            plays={data.plays}
-            live={live}
-            away={{ abbr: game.awayTeam.abbreviation, name: game.awayTeam.name, color: game.awayTeam.primaryColor }}
-            home={{ abbr: game.homeTeam.abbreviation, name: game.homeTeam.name, color: game.homeTeam.primaryColor }}
-            players={data.logs.map((l) => ({
-              id: l.playerId,
-              name: l.name,
-              team: l.teamId === data.home.teamId ? game.homeTeam.abbreviation : game.awayTeam.abbreviation,
-            }))}
-          />
-        ))}
+        {tab === 'pbp' &&
+          (!data ? (
+            waiting
+          ) : (
+            <GamePlays
+              plays={data.plays}
+              live={live}
+              away={{ abbr: game.awayTeam.abbreviation, name: game.awayTeam.name, color: game.awayTeam.primaryColor }}
+              home={{ abbr: game.homeTeam.abbreviation, name: game.homeTeam.name, color: game.homeTeam.primaryColor }}
+              players={data.logs.map((l) => ({
+                id: l.playerId,
+                name: l.name,
+                team: l.teamId === data.home.teamId ? game.homeTeam.abbreviation : game.awayTeam.abbreviation,
+              }))}
+            />
+          ))}
 
-      {tab === 'team' &&
-        (!scored || !data ? waiting : <TeamStats data={data} away={game.awayTeam} home={game.homeTeam} />)}
+        {tab === 'team' &&
+          (!scored || !data ? waiting : <TeamStats data={data} away={game.awayTeam} home={game.homeTeam} />)}
+      </TabPanel>
     </div>
   );
 }
