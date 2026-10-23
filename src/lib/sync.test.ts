@@ -11,6 +11,7 @@ import { legacyId, matcher, normName, resolvePlayer } from './identity';
 import { benchReason, clockParts, gameKind, inches, lineOf, logsFromBox, minutesPlayed, playsFromPbp, shotsFromPbp, topOf } from './nba';
 import { alignment, cupFinal, nn, pctOf, seasonLine, seasonPath, teamIdFor } from './bref';
 import { localTip, shiftDay, todayEt } from './dates';
+import { displayName, rowsFromWords, type Word } from './injuries';
 
 const near = (a: number, b: number, eps: number, msg: string) =>
   assert.ok(Math.abs(a - b) < eps, `${msg} expected ~${b}, got ${a}`);
@@ -252,5 +253,38 @@ assert.equal(localTip('2027-01-15', '12:00 pm ET', 'America/New_York'), '12:00 p
 assert.equal(localTip('2027-01-15', 'Final/OT'), 'Final/OT', 'non-times pass through');
 assert.equal(shiftDay('2026-10-31', 1), '2026-11-01', 'next day across a month');
 assert.equal(shiftDay('2026-11-01', -1), '2026-10-31', 'previous day');
+
+// --- NBA injury report (PDF words -> rows) ---------------------------------------------
+// The real layout in miniature: header on page 1 only, a two-line reason, a team
+// that hasn't filed, and a reason that runs over the page break.
+const w = (x: number, y: number, str: string): Word => ({ x, y, str });
+const header = ['Game', 'Matchup', 'Team', 'Player', 'Current', 'Reason'].map((s, i) => w([23, 200, 264, 425, 586, 666][i], 480, s));
+const injuryRows = rowsFromWords([
+  [
+    w(289, 533, 'Injury'), ...header,
+    w(24, 452, '10/22/2026'), w(201, 452, 'CLE@PHI'), w(265, 452, 'Cleveland'), w(307, 452, 'Cavaliers'),
+    w(426, 452, 'Allen,'), w(451, 452, 'Jarrett'), w(587, 452, 'Available'),
+    w(667, 459, 'Injury/Illness'), w(722, 459, '-'), w(727, 459, 'Right'), w(667, 445, 'Tendinopathy'),
+    w(426, 416, 'Udeh,'), w(453, 416, 'Jr.,'), w(467, 416, 'Ernest'), w(587, 416, 'Out'),
+    w(667, 416, 'G'), w(676, 416, 'League'), w(707, 416, '-'), w(712, 416, 'Two-'), w(732, 416, 'Way'),
+    w(265, 380, 'Philadelphia'), w(317, 380, '76ers'), w(667, 380, 'NOT'), w(690, 380, 'YET'), w(710, 380, 'SUBMITTED'),
+    w(201, 340, 'DEN@OKC'), w(265, 340, 'Denver'), w(307, 340, 'Nuggets'),
+    w(426, 340, 'Jones,'), w(455, 340, 'Spencer'), w(587, 340, 'Questionable'), w(667, 347, 'Injury/Illness'), w(722, 347, '-'), w(727, 347, 'Bilateral'),
+    w(399, 50, 'Page'),
+  ],
+  [w(289, 533, 'Injury'), w(667, 506, 'Hamstring'), w(426, 477, 'Topic,'), w(453, 477, 'Nikola'), w(587, 477, 'Out'), w(667, 477, 'Rest')],
+]);
+assert.deepEqual(
+  injuryRows.map((r) => [r.matchup, r.team, r.name, r.status, r.reason]),
+  [
+    ['CLE@PHI', 'CLE', 'Jarrett Allen', 'Available', 'Injury/Illness - Right Tendinopathy'],
+    ['CLE@PHI', 'CLE', 'Ernest Udeh Jr.', 'Out', 'G League - Two-Way'],
+    ['DEN@OKC', 'DEN', 'Spencer Jones', 'Questionable', 'Injury/Illness - Bilateral Hamstring'],
+    ['DEN@OKC', 'DEN', 'Nikola Topic', 'Out', 'Rest'],
+  ],
+  'injury report: carry-down, wrapped and spilled reasons, unfiled teams skipped, DEN not the 1949 Nuggets',
+);
+assert.equal(injuryRows[0].date, '10/22/2026', 'report date carries');
+assert.equal(displayName('Butler III, Jimmy'), 'Jimmy Butler III', 'suffix after the surname');
 
 console.log('feeds: all checks passed');

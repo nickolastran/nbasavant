@@ -120,7 +120,7 @@ export async function liveGame(gameCode: string, final: boolean) {
         text: att ? `${t.statistics[made]}-${t.statistics[att]}` : String(t.statistics[made] ?? '—'),
         pct: att && t.statistics[att] ? (t.statistics[made] / t.statistics[att]) * 100 : null,
       })),
-      /** Who didn't get in, and why, when the feed says; `note` is the injury itself when one is listed. */
+      /** Who didn't get in, and why, when the feed says. */
       inactive: (t.players as any[])
         .filter((p) => p.played !== '1')
         .map((p) => ({
@@ -128,7 +128,6 @@ export async function liveGame(gameCode: string, final: boolean) {
           name: `${p.firstName} ${p.familyName}`.trim(),
           jersey: (p.jerseyNum as string) || null,
           reason: benchReason(p.notPlayingReason),
-          note: (p.notPlayingDescription as string) || null,
         })),
       /** The five on the floor right now (all five at the last whistle once it's final). */
       onCourt: (t.players as any[]).filter((p) => p.oncourt === '1').map((p) => p.personId as number),

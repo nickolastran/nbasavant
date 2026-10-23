@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { MotionConfig, motion } from 'framer-motion';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 /**
  * The game page's tabs. They're links (`?tab=`), so each is shareable and the
@@ -47,13 +47,20 @@ export function Tabs({ tabs, current }: { tabs: { value: string; label: string }
   );
 }
 
-/** One tab's content; a new `tab` fades up into place. */
+// The page as first loaded shows at once (and in the server HTML, before any
+// script runs); only a tab picked after that fades in.
+let loaded = false;
+
+/** One tab's content; a newly picked `tab` fades up into place. */
 export function TabPanel({ tab, children }: { tab: string; children: ReactNode }) {
+  useEffect(() => {
+    loaded = true;
+  }, []);
   return (
     <MotionConfig reducedMotion="user">
       <motion.div
         key={tab}
-        initial={{ opacity: 0, y: 8 }}
+        initial={loaded ? { opacity: 0, y: 8 } : false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.22, ease: 'easeOut' }}
         className="space-y-4"

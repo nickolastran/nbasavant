@@ -5,6 +5,8 @@ import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
 import { WinProbability, type WinPoint } from '@/components/WinProbability';
 import { prisma, type Standing } from '@/lib/db';
+import { normName } from '@/lib/identity';
+import { gameInjuries } from '@/lib/injuries';
 import { fmt, perGame } from '@/lib/format';
 import type { liveGame } from '@/lib/live';
 import type { Broadcast } from '@/lib/nba';
@@ -92,7 +94,7 @@ export async function GameTab({ game, data, standings }: { game: GameInfo; data:
         <Now game={game} data={data} />
         {data && data.state !== 'pre' && <GameLeaders game={game} data={data} />}
         <TeamLeaders game={game} season={season} players={players} />
-        <Injuries game={game} data={data} />
+        <Injuries game={game} />
       </div>
       <div className="space-y-4">
         <Records game={game} standings={standings} series={series} />
@@ -423,43 +425,83 @@ function TeamLeaders({ game, season, players }: { game: GameInfo; season: Season
   );
 }
 
-function Injuries({ game, data }: { game: GameInfo; data: Live | null }) {
-  // The box score lists who's inactive and why; a coach's decision isn't an injury.
-  const out = (t: Live['home'] | undefined) =>
-    (t?.inactive ?? []).filter((p) => p.note || (p.reason && p.reason !== "coach's decision"));
-  const sides = [
-    { team: game.away, list: out(data?.away) },
-    { team: game.home, list: out(data?.home) },
-  ];
+const STATUS_COLOR: Record<string, string> = {
+  Out: 'var(--neg)', Doubtful: 'var(--s4)', Questionable: 'var(--s4)', Probable: 'var(--pos)', Available: 'var(--pos)',
+};
+
+/**
+ * The NBA's official injury report for this game: the newest report that
+ * lists it, each player's status and why. Names are matched to the two
+ * rosters (accents and punctuation aside) so they link.
+ */
+async function Injuries({ game }: { game: GameInfo }) {
+  const report = await gameInjuries(game.seasonKey, game.day, game.away.abbreviation, game.home.abbreviation);
+  const roster = report
+    ? await prisma.player.findMany({ where: { teamId: { in: [game.away.id, game.home.id] } }, select: { id: true, fullName: true } })
+    : [];
+  const idOf = new Map(roster.map((p) => [normName(p.fullName), p.id]));
   return (
-    <Card title="Injury report">
-      {!data ? (
+    <Card
+      title="Injury report"
+      action={
+        report?.asOf && (
+          <span className="text-[0.6875rem] font-normal normal-case tracking-normal" style={muted}>
+            NBA official, {report.asOf}
+          </span>
+        )
+      }
+    >
+      {!report ? (
         <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
-          The NBA lists who&apos;s out with the box score, which opens around tip-off.
+          The NBA&apos;s official injury report doesn&apos;t list this game.
         </p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {sides.map(({ team, list }) => (
-            <div key={team.id}>
-              <TeamHead team={team} />
-              {list.length ? (
-                <ul className="space-y-1 text-[0.8125rem]">
-                  {list.map((p) => (
-                    <li key={p.playerId}>
-                      <Link href={`/players/${p.playerId}`} className="link font-medium">
-                        {p.name}
-                      </Link>{' '}
-                      <span style={muted}>{p.note ?? p.reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-[0.8125rem]" style={muted}>
-                  Nobody listed.
-                </p>
-              )}
-            </div>
-          ))}
+        <div className="space-y-4">
+          {[game.away, game.home].map((team) => {
+            const list = report.rows.filter((r) => r.team === team.abbreviation);
+            return (
+              <div key={team.id}>
+                <TeamHead team={team} />
+                {list.length ? (
+                  <ul className="text-[0.8125rem]">
+                    {list.map((r) => {
+                      const id = idOf.get(normName(r.name));
+                      return (
+                        <li key={r.name} className="flex items-center gap-3 border-t py-1.5" style={{ borderColor: 'var(--line)' }}>
+                          {id ? (
+                            <Headshot id={id} name="" className="h-9 w-9 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top" />
+                          ) : (
+                            <span className="h-9 w-9 shrink-0 rounded-full" style={{ background: 'var(--panel-2)' }} />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              {id ? (
+                                <Link href={`/players/${id}`} className="link font-medium">
+                                  {r.name}
+                                </Link>
+                              ) : (
+                                <span className="font-medium">{r.name}</span>
+                              )}
+                              <span className="shrink-0 text-[0.6875rem] font-semibold uppercase" style={{ color: STATUS_COLOR[r.status] ?? 'var(--ink-2)' }}>
+                                {r.status}
+                              </span>
+                            </div>
+                            <div className="text-[0.75rem]" style={muted}>
+                              {r.reason}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-[0.8125rem]" style={muted}>
+                    Nobody listed.
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </Card>
