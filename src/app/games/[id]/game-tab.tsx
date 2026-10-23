@@ -8,7 +8,7 @@ import { prisma, type Standing } from '@/lib/db';
 import { fmt, perGame } from '@/lib/format';
 import type { liveGame } from '@/lib/live';
 import type { Broadcast } from '@/lib/nba';
-import { gamesBehind, minGames, winProbability } from '@/lib/stats';
+import { gameClock, gamesBehind, minGames, winProbability } from '@/lib/stats';
 
 export type Live = NonNullable<Awaited<ReturnType<typeof liveGame>>>;
 type Team = { id: number; abbreviation: string; city: string; name: string; primaryColor: string };
@@ -167,19 +167,10 @@ function OnCourt({ game, data, position }: { game: GameInfo; data: Live; positio
   );
 }
 
-/** Seconds since tip-off, and seconds left in regulation (or in this overtime). */
-function clockOf(period: number, clock: string) {
-  const [m, s] = clock.split(':').map(Number);
-  const rest = (m || 0) * 60 + (s || 0);
-  return period <= 4
-    ? { elapsed: (period - 1) * 720 + (720 - rest), left: (4 - period) * 720 + rest }
-    : { elapsed: 2880 + (period - 5) * 300 + (300 - rest), left: rest };
-}
-
 function WinChance({ game, data }: { game: GameInfo; data: Live }) {
   const points: WinPoint[] = [{ t: 0, p: winProbability(0, 2880), when: 'Tip-off', score: '0-0' }];
   for (const play of data.plays) {
-    const { elapsed, left } = clockOf(play.period, play.clock);
+    const { elapsed, left } = gameClock(play.period, play.clock);
     points.push({
       t: elapsed,
       p: winProbability(play.homeScore - play.awayScore, left),

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
-  gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
+  gameClock, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
   careerAdvanced, careerTotals, minGames, percentileOf, pythagWins, scaledFloor, standings,
 } from './stats';
 import { ordinal } from './format';
@@ -266,6 +266,10 @@ assert.deepEqual(
   ['0th', '1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '50th', '100th', '101st', '111th'],
   'ordinals, including the teens',
 );
+
+assert.deepEqual(gameClock(1, '12:00'), { elapsed: 0, left: 2880 }, 'tip-off');
+assert.deepEqual(gameClock(3, '5:30'), { elapsed: 1440 + 390, left: 720 + 330 }, 'mid third quarter');
+assert.deepEqual(gameClock(5, '1:00'), { elapsed: 2880 + 240, left: 60 }, 'overtime counts its own five minutes');
 
 // Win probability: even at tip-off bar the home edge, certain at the horn, and a
 // lead is worth more the less time is left.

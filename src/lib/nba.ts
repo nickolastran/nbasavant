@@ -188,21 +188,36 @@ export function shotsFromPbp(game: any) {
     });
 }
 
-/** The filterable feed on a game page, in the shape PlayByPlay renders. */
+/**
+ * Every action on a game page, in order, with what the play-by-play tab filters
+ * and draws on: who did it (and who assisted or blocked it), the raw type and
+ * subtype ("2pt" / "DUNK"), and for a field goal where it was taken, in the same
+ * basket-origin tenths of a foot as `shotsFromPbp`.
+ */
 export function playsFromPbp(game: any) {
   return (game.actions as any[]).map((a) => {
     const { min, sec } = clockParts(a.clock);
     const fg = a.actionType === '2pt' || a.actionType === '3pt';
     return {
+      id: a.actionNumber as number,
       period: a.period as number,
       clock: `${min}:${String(sec).padStart(2, '0')}`,
       description: a.description as string,
       eventType: fg
         ? a.shotResult === 'Made' ? 'SHOT' : 'MISS'
         : a.actionType === 'freethrow' ? 'FREE THROW' : String(a.actionType).toUpperCase(),
+      type: a.actionType as string,
+      subType: (a.subType as string) || '',
       teamAbbr: (a.teamTricode as string) ?? '',
       homeScore: Number(a.scoreHome),
       awayScore: Number(a.scoreAway),
+      playerId: (a.personId as number) || null,
+      player: (a.playerNameI as string) || null,
+      assistId: (a.assistPersonId as number) || null,
+      assist: (a.assistPlayerNameInitial as string) || null,
+      blockId: (a.blockPersonId as number) || null,
+      made: a.shotResult === 'Made',
+      shot: fg ? { x: a.xLegacy as number, y: a.yLegacy as number, value: a.actionType === '3pt' ? 3 : 2 } : null,
     };
   });
 }

@@ -2,8 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
 import { AutoRefresh } from '@/components/AutoRefresh';
-import { PlayByPlay } from '@/components/PlayByPlay';
-import { ShotChart, type Shot } from '@/components/ShotChart';
+import { GamePlays } from '@/components/GamePlays';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
 import { seasonStandings, type Standing } from '@/lib/db';
@@ -267,25 +266,21 @@ async function NbaGame({ game, standings, tab }: { game: GameRow; standings: Sta
         ))}
 
       {tab === 'pbp' &&
-        (!data
-          ? waiting
-          : (
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-                <ShotChart
-                  shots={data.shots.map(
-                    (s): Shot => ({
-                      x: s.x, y: s.y, made: s.made, value: s.value, distanceFt: s.distanceFt,
-                      zone: s.zone, action: s.actionType, player: s.player, period: s.period,
-                      clock: `${s.minsLeft}:${String(s.secsLeft).padStart(2, '0')}`,
-                    }),
-                  )}
-                  title="Every shot in this game"
-                  subtitle={`${data.shots.length} attempts, from the NBA's play-by-play`}
-                />
-                {/* Newest first while it's live; in order once it's over. */}
-                <PlayByPlay plays={live ? [...data.plays].reverse() : data.plays} />
-              </div>
-            ))}
+        (!data ? (
+          waiting
+        ) : (
+          <GamePlays
+            plays={data.plays}
+            live={live}
+            away={{ abbr: game.awayTeam.abbreviation, name: game.awayTeam.name, color: game.awayTeam.primaryColor }}
+            home={{ abbr: game.homeTeam.abbreviation, name: game.homeTeam.name, color: game.homeTeam.primaryColor }}
+            players={data.logs.map((l) => ({
+              id: l.playerId,
+              name: l.name,
+              team: l.teamId === data.home.teamId ? game.homeTeam.abbreviation : game.awayTeam.abbreviation,
+            }))}
+          />
+        ))}
 
       {tab === 'team' &&
         (!scored

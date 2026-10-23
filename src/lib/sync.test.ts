@@ -147,9 +147,14 @@ for (const label of ['Left Corner 3', 'Right Corner 3', 'Above the Break 3']) {
 const plays = playsFromPbp(pbp);
 assert.equal(plays.length, pbp.actions.length, 'one play per action');
 assert.deepEqual(
-  plays[0],
-  { period: 1, clock: '12:00', description: 'Period Start', eventType: 'PERIOD', teamAbbr: '', homeScore: 0, awayScore: 0 },
+  (({ period, clock, description, eventType, teamAbbr, homeScore, awayScore, shot }) =>
+    ({ period, clock, description, eventType, teamAbbr, homeScore, awayScore, shot }))(plays[0]),
+  { period: 1, clock: '12:00', description: 'Period Start', eventType: 'PERIOD', teamAbbr: '', homeScore: 0, awayScore: 0, shot: null },
   'period start',
+);
+assert.ok(
+  plays.filter((p) => p.shot).every((p) => p.type === '2pt' || p.type === '3pt'),
+  'only field goals carry a shot spot',
 );
 assert.deepEqual(
   [plays[2].eventType, plays[2].teamAbbr, plays[2].awayScore, plays[2].homeScore],

@@ -290,6 +290,18 @@ export function winProbability(margin: number, secondsLeft: number, homeEdge = 2
   return normalCdf((margin + homeEdge * share) / (13.5 * Math.sqrt(share)));
 }
 
+/**
+ * Where a play falls in the game from its period and clock ("5:21"): seconds
+ * since tip-off, and seconds left in regulation, or in this overtime.
+ */
+export function gameClock(period: number, clock: string) {
+  const [m, s] = clock.split(':').map(Number);
+  const rest = (m || 0) * 60 + (s || 0);
+  return period <= 4
+    ? { elapsed: (period - 1) * 720 + (720 - rest), left: (4 - period) * 720 + rest }
+    : { elapsed: 2880 + (period - 5) * 300 + (300 - rest), left: rest };
+}
+
 /** Winning percentage. A team that hasn't played yet sits at .000, not NaN. */
 export const winPct = (w: number, l: number) => div(w, w + l);
 
