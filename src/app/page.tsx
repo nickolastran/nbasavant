@@ -39,7 +39,8 @@ export default async function Home() {
     }),
     prisma.teamStats.findMany({
       where: { seasonId: season.id },
-      orderBy: { netRtg: 'desc' },
+      // A team that hasn't played has no rating; Postgres would rank those first.
+      orderBy: { netRtg: { sort: 'desc', nulls: 'last' } },
       take: 5,
       include: { team: true },
     }),
@@ -59,7 +60,7 @@ export default async function Home() {
           ? prisma.playerGameLog.findMany({
               where: { seasonId: season.id, date: last.date },
               orderBy: [{ pts: 'desc' }, { reb: 'desc' }],
-              take: 3,
+              take: 4,
               include: {
                 player: { select: { fullName: true } },
                 team: { select: { abbreviation: true, primaryColor: true } },
@@ -189,7 +190,7 @@ export default async function Home() {
               {topTeams.map((t, i) => (
                 <li key={t.teamId} className="flex items-center gap-3 py-2">
                   <span className="eyebrow w-4 tnum">{i + 1}</span>
-                  <span className="h-6 w-1 rounded-sm" style={{ background: t.team.primaryColor }} />
+                  <TeamMark abbr={t.team.abbreviation} color={t.team.primaryColor} size={22} />
                   <Link href={`/teams/${t.team.abbreviation}`} className="link flex-1 text-sm font-medium">
                     {t.name ?? `${t.team.city} ${t.team.name}`}
                   </Link>

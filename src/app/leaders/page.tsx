@@ -54,7 +54,7 @@ export default async function LeadersPage({
     <div>
       <h1 className="mb-1 text-xl font-bold tracking-tight">Stat Leaders</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
-        {season?.key}. To qualify: {minGp} games ({teamGames ? '70% of team games so far' : 'no games yet'}); rate
+        {season?.key}. To qualify: {sp.minGp ? `${minGp} games` : teamGames ? "70% of the team's games so far" : 'no games yet'}; rate
         boards also need their attempts, and usage, PER and BPM their minutes, prorated to games played. Win shares and VORP are season totals and rank
         everyone.
       </p>

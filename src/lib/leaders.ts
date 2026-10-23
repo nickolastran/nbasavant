@@ -18,7 +18,7 @@ export type Stat = Exclude<keyof Line, 'playerId' | 'name' | 'abbr' | 'color' | 
 
 /**
  * Each board, and what it takes to be on it. Per-game and rate boards need
- * 70% of team games; rate boards also an attempt floor (the 82-game number,
+ * 70% of the player's team's games; rate boards also an attempt floor (the 82-game number,
  * prorated); usage, PER and BPM a minutes floor (1000, about 12 a game), so a
  * two-minute cameo can't top them. Season totals (WS, VORP) rank everyone.
  */
@@ -77,14 +77,18 @@ export async function leaderBoards(seasonId: number | undefined, n = 10, minGpOv
 
   const teamGames = Math.max(0, ...teamStats.map((t) => t.gp), ...lines.map((l) => l.gp));
   const minGp = minGpOverride || minGames(teamGames);
+  // Floors follow each player's own team: early on, one team two games in
+  // mustn't shut out everyone whose team has played once.
+  const gpOf = new Map(teamStats.map((t) => [t.teamId, t.gp]));
+  const games = (l: Line) => gpOf.get(l.teamId ?? -1) ?? teamGames;
   const boards = BOARDS.map((b) => ({
     ...b,
     tracked: lines.some((l) => l[b.key] !== null),
     rows: rank(
       lines.filter(
         (l) =>
-          (b.total || l.gp >= minGp) &&
-          (!b.floor || (l[b.floor[0]] ?? 0) >= scaledFloor(b.floor[1], teamGames)),
+          (b.total || l.gp >= (minGpOverride || minGames(games(l)))) &&
+          (!b.floor || (l[b.floor[0]] ?? 0) >= scaledFloor(b.floor[1], games(l))),
       ),
       b.key,
     ).slice(0, n),
