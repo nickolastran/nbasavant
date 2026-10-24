@@ -6,7 +6,9 @@ import { LeaderRail, RailSkeleton, type RailBoard } from '@/components/LeaderRai
 import { Bone } from '@/components/Skeleton';
 import { ShotChart, type Shot } from '@/components/ShotChart';
 import { TeamMark } from '@/components/TeamMark';
+import { todayEt } from '@/lib/dates';
 import { fmt } from '@/lib/format';
+import type { GameLeaders } from '@/lib/nba';
 import { isPerGame, leaderBoards, type Stat } from '@/lib/leaders';
 
 export const revalidate = 60;
@@ -37,7 +39,8 @@ async function HomeContent() {
   const season = await getSeason();
   if (!season) return <EmptyState />;
 
-  const [{ boards, teamStats }, games, topTeams, shots, totals, finals, best] = await Promise.all([
+  const today = todayEt();
+  const [{ boards, teamStats }, games, topTeams, shots, totals, finals, best, onThisDate] = await Promise.all([
     leaderBoards(season.id, 5),
     prisma.game.findMany({
       where: { seasonId: season.id, status: { startsWith: 'Final' } },
@@ -79,6 +82,20 @@ async function HomeContent() {
             })
           : [],
       ),
+    // On this date in past seasons, the most dramatic first: more overtimes, then
+    // the closest finish, then the most points. Final scores reach back to 1946-47.
+    prisma.$queryRaw<{ id: number; date: Date; homeScore: number; awayScore: number; status: string; homeTeamId: number; awayTeamId: number; leaders: GameLeaders | null }[]>`
+      SELECT id, date, "homeScore", "awayScore", status, "homeTeamId", "awayTeamId", leaders
+      FROM games
+      WHERE to_char(date, 'MM-DD') = ${today.slice(5)} AND date < ${today}::date
+        AND status LIKE 'Final%' AND kind <> 'preseason'
+      ORDER BY period DESC, abs("homeScore" - "awayScore"), "homeScore" + "awayScore" DESC
+      LIMIT 5`.then(async (rows) => {
+      const teams = new Map(
+        (await prisma.team.findMany({ where: { id: { in: rows.flatMap((g) => [g.homeTeamId, g.awayTeamId]) } } })).map((t) => [t.id, t]),
+      );
+      return rows.map((g) => ({ ...g, home: teams.get(g.homeTeamId)!, away: teams.get(g.awayTeamId)! }));
+    }),
   ]);
 
   // League averages: the mean of every team that has played.
@@ -168,6 +185,36 @@ async function HomeContent() {
                     </Link>
                   </li>
                 ))}
+              </ol>
+            </>
+          )}
+
+          {onThisDate.length > 0 && (
+            <>
+              <p className="eyebrow mt-6">
+                On this date ·{' '}
+                {new Date(`${today}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+              </p>
+              <ol className="panel mt-2 divide-y" style={{ borderColor: 'var(--line)' }}>
+                {onThisDate.map((g) => {
+                  const top = [g.leaders?.away, g.leaders?.home].filter((l) => l).sort((a, b) => b!.pts - a!.pts)[0];
+                  return (
+                    <li key={g.id}>
+                      <Link href={`/games/${g.id}`} className="flex items-center gap-2 px-3 py-2 text-sm no-underline hover:bg-[var(--panel-2)]" style={{ color: 'var(--ink)' }}>
+                        <span className="eyebrow tnum w-10">{g.date.getUTCFullYear()}</span>
+                        <TeamMark abbr={g.away.abbreviation} color={g.away.primaryColor} size={18} />
+                        <span className="tnum">
+                          {g.away.abbreviation} {g.awayScore} @ {g.home.abbreviation} {g.homeScore}
+                        </span>
+                        <TeamMark abbr={g.home.abbreviation} color={g.home.primaryColor} size={18} />
+                        <span className="min-w-0 flex-1 truncate text-right text-xs" style={{ color: 'var(--ink-2)' }}>
+                          {top && `${top.name} ${top.pts}`}
+                        </span>
+                        {g.status !== 'Final' && <span className="eyebrow">{g.status.replace('Final/', '')}</span>}
+                      </Link>
+                    </li>
+                  );
+                })}
               </ol>
             </>
           )}
