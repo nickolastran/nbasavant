@@ -291,30 +291,43 @@ export function shotZone(x: number, y: number): { zone: string; area: string; va
 export const pointsPerShot = (made: number, attempts: number, value: number) =>
   div(made * value, attempts);
 
-/** A count of one player's real shots from one spot, made or missed. */
-export type ShotGroup = { playerId: number; value: number; distanceFt: number; made: boolean; n: number };
+/** A count of one player's real shots from one spot, made or missed; `type` is the feed's "Jump Shot", "Layup", "DUNK", "Hook". */
+export type ShotGroup = { playerId: number; value: number; distanceFt: number; made: boolean; n: number; type?: string };
+
+/** League attempts a shot type needs at a spot before it's priced on its own: about ±5 points of FG% at worst. */
+export const MIN_TYPE_ATTEMPTS = 100;
 
 /**
  * Expected eFG% (Savant's xwOBA idea, for shots): what the league makes from
  * the spots a player shoots from, against what he makes. A spot is the shot's
  * value and its distance to the foot, so a corner three and a 22-foot two are
- * priced apart; 30 feet and out is one heave bucket. Shot-making is eFG% minus
- * expected eFG%, in points: zero is an average shooter on his diet.
- * ponytail: location only, no shot type, defender or clock. Add actionType to
- * the spot once a season has enough shots to fill the buckets.
+ * priced apart; 30 feet and out is one heave bucket. Within a spot, a shot type
+ * the league has taken MIN_TYPE_ATTEMPTS times gets its own rate (a dunk and a
+ * jumper from 3 feet are different shots); the thinner types share what's left
+ * of the spot, so early in a season it's location alone and the types come in
+ * as they fill. Shot-making is eFG% minus expected eFG%, in points: zero is an
+ * average shooter on his diet.
+ * ponytail: no defender or clock. Add them the same way, as a finer bucket once filled.
  */
 export function expectedShooting(groups: ShotGroup[]) {
   const spot = (g: ShotGroup) => `${g.value}:${Math.min(g.distanceFt, 30)}`;
-  const league = new Map<string, { made: number; att: number }>();
-  for (const g of groups) {
-    const b = league.get(spot(g)) ?? { made: 0, att: 0 };
-    b.att += g.n;
-    if (g.made) b.made += g.n;
-    league.set(spot(g), b);
-  }
+  const typed = (g: ShotGroup) => `${spot(g)}:${g.type?.toLowerCase() ?? ''}`;
+  const tally = (key: (g: ShotGroup) => string) => {
+    const m = new Map<string, { made: number; att: number }>();
+    for (const g of groups) {
+      const b = m.get(key(g)) ?? { made: 0, att: 0 };
+      b.att += g.n;
+      if (g.made) b.made += g.n;
+      m.set(key(g), b);
+    }
+    return m;
+  };
+  const byType = tally(typed);
+  const bucket = (g: ShotGroup) => (g.type && byType.get(typed(g))!.att >= MIN_TYPE_ATTEMPTS ? typed(g) : spot(g));
+  const league = tally(bucket);
   const players = new Map<number, { fga: number; pts: number; xPts: number }>();
   for (const g of groups) {
-    const b = league.get(spot(g))!;
+    const b = league.get(bucket(g))!;
     const p = players.get(g.playerId) ?? { fga: 0, pts: 0, xPts: 0 };
     p.fga += g.n;
     if (g.made) p.pts += g.n * g.value;

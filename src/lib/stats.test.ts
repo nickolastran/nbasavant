@@ -4,7 +4,7 @@ import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
-  careerAdvanced, careerTotals, expectedShooting, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
+  careerAdvanced, careerTotals, expectedShooting, MIN_TYPE_ATTEMPTS, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
   activeStreak, nextMilestone, onPace,
 } from './stats';
 import { ordinal, shortNames } from './format';
@@ -204,6 +204,29 @@ const heave = expectedShooting([
   { playerId: 2, value: 3, distanceFt: 45, made: false, n: 1 },
 ]);
 near(heave.get(2)!.xEfg, 75, 0.001, 'heaves share a bucket');
+// Shot type: at 2 feet the league dunks MIN of MIN (100%) and makes MIN/2 of MIN
+// jumpers (50%). Player 1 only dunks, player 2 only shoots jumpers. Priced by
+// type, 1 is expected to make all of his and 2 half; by spot alone, both 75%.
+const atRim = (n: number, typedDunks = true) => expectedShooting([
+  { playerId: 1, value: 2, distanceFt: 2, made: true, n, type: typedDunks ? 'DUNK' : undefined },
+  { playerId: 2, value: 2, distanceFt: 2, made: true, n: n / 2, type: 'Jump Shot' },
+  { playerId: 2, value: 2, distanceFt: 2, made: false, n: n / 2, type: 'Jump Shot' },
+]);
+const full = atRim(MIN_TYPE_ATTEMPTS);
+near(full.get(1)!.xEfg, 100, 0.001, 'dunks priced as dunks once the bucket is full');
+near(full.get(2)!.xEfg, 50, 0.001, 'jumpers priced as jumpers');
+near(full.get(2)!.shotMaking, 0, 0.001, 'an average jump shooter is average');
+const thin = atRim(MIN_TYPE_ATTEMPTS - 2);
+near(thin.get(1)!.xEfg, 75, 0.001, 'too few of a type: the spot rate');
+near(thin.get(2)!.xEfg, 75, 0.001, 'both types fall back together');
+// A full bucket beside a thin one: the thin type takes the rest of the spot, so the league still nets to zero.
+const mixed = expectedShooting([
+  { playerId: 1, value: 2, distanceFt: 2, made: true, n: MIN_TYPE_ATTEMPTS, type: 'DUNK' },
+  { playerId: 2, value: 2, distanceFt: 2, made: true, n: 3, type: 'Hook' },
+  { playerId: 3, value: 2, distanceFt: 2, made: false, n: 7, type: 'Layup' },
+]);
+near(mixed.get(2)!.xEfg, 30, 0.001, 'thin types share what is left of the spot');
+near([...mixed.values()].reduce((s, p) => s + p.shotMaking * p.fga, 0), 0, 1e-9, 'still nets to zero');
 
 // --- Standings ------------------------------------------------------------
 near(winPct(60, 22), 0.7317, 0.0001, 'winning percentage');

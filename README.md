@@ -154,7 +154,8 @@ lines that straddle 1973-74.
 - **Exact** (basketball-reference definitions): TS%, eFG%, USG%, AST%, REB%, STL%, BLK%, TOV%,
   possessions, pace, team ORtg/DRtg, PER, Pythagorean wins (exponent 14).
 - **Expected shooting** (2026-27 on, from real shots): shot quality is the eFG% the league makes from
-  the spots a player shoots from (shot value and distance to the foot); shot-making is his eFG% minus that.
+  the spots a player shoots from (shot value and distance to the foot), and by shot type (jumper, layup,
+  dunk, hook) wherever the league has taken 100 of that type from that spot; shot-making is his eFG% minus that.
 - **Similar seasons**: every player-season with 500 minutes (prorated, never under 200) as twelve stats (box
   score per 36, TS%, USG%, 3PA and FT rate, WS/48, BPM), each a z-score within its own season, so eras compare
   by standing, not raw numbers. Nearest by RMS distance over the stats both seasons have, needing three

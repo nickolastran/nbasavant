@@ -58,11 +58,11 @@ export const rank = (pool: Line[], key: Stat) =>
 /** Expected shooting for every player with real shots in a season (2026-27 on). */
 export async function seasonShooting(seasonId: number) {
   const groups = await prisma.shotData.groupBy({
-    by: ['playerId', 'value', 'distanceFt', 'made'],
+    by: ['playerId', 'value', 'distanceFt', 'actionType', 'made'],
     where: { seasonId, eventNum: { not: null } },
     _count: true,
   });
-  return expectedShooting(groups.map((g) => ({ ...g, n: g._count })));
+  return expectedShooting(groups.map(({ actionType, _count, ...g }) => ({ ...g, type: actionType, n: _count })));
 }
 
 type Totals = { seconds: number; pts: number; oppPts: number; poss: number; oppPoss: number };

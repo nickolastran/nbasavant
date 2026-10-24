@@ -200,7 +200,7 @@ export default async function PlayerPage({
     { label: 'True shooting', unit: '%', get: (f) => f.tsPct, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)) },
     {
       label: 'Shot quality', unit: '%', get: (f) => xShot.get(f.playerId)?.xEfg ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
-      title: 'Expected eFG%: what the league makes from the spots he shoots from',
+      title: 'Expected eFG%: what the league makes on his shots, by spot and shot type',
     },
     {
       label: 'Shot-making', signed: true, get: (f) => xShot.get(f.playerId)?.shotMaking ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
