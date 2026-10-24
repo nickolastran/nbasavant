@@ -10,7 +10,7 @@ import { StatTable, type Col } from '@/components/StatTable';
 import { TrendChart } from '@/components/TrendChart';
 import { ViewTabs } from '@/components/ViewTabs';
 import { feetInches, fmt, ordinal, perGame } from '@/lib/format';
-import { careerAdvanced, careerTotals, minGames, percentileOf, scaledFloor, type SeasonLine } from '@/lib/stats';
+import { careerAdvanced, careerTotals, expectedShooting, minGames, percentileOf, scaledFloor, type SeasonLine } from '@/lib/stats';
 
 export const revalidate = 60;
 
@@ -121,6 +121,18 @@ export default async function PlayerPage({
     prisma.transaction.findMany({ where: { playerId: id }, include: { team: true }, orderBy: { date: 'desc' }, take: 20 }),
   ]);
 
+  // Expected shooting needs the whole league's real shots, so only seasons that have them.
+  const realShots = shots.some((s) => s.eventNum !== null);
+  const xShot = realShots
+    ? expectedShooting(
+        (await prisma.shotData.groupBy({
+          by: ['playerId', 'value', 'distanceFt', 'made'],
+          where: { seasonId: season!.id, eventNum: { not: null } },
+          _count: true,
+        })).map((g) => ({ ...g, n: g._count })),
+      )
+    : expectedShooting([]);
+
   // --- Percentile rankings against the qualified field -----------------------
   // Each player qualifies on his own team's games (as /leaders does): early on,
   // one team a game ahead mustn't shrink the field to its own roster.
@@ -128,7 +140,7 @@ export default async function PlayerPage({
   const teamGames = Math.max(0, ...teamGp.map((t) => t.gp));
   const gamesOf = (f: { teamId: number | null }) => gpOf.get(f.teamId ?? -1) ?? teamGames;
   const qualified = field.filter((f) => f.gp >= minGames(gamesOf(f)));
-  type Metric = { label: string; unit?: string; dp?: number; low?: boolean; get: (f: (typeof field)[number]) => Cell; floor?: (f: (typeof field)[number]) => boolean };
+  type Metric = { label: string; unit?: string; dp?: number; low?: boolean; signed?: boolean; title?: string; get: (f: (typeof field)[number]) => Cell; floor?: (f: (typeof field)[number]) => boolean };
   const a = (f: (typeof field)[number]) => f.player.advancedStats[0];
   const METRICS: Metric[] = [
     { label: 'Points', get: (f) => f.ppg },
@@ -138,6 +150,14 @@ export default async function PlayerPage({
     { label: 'Blocks', get: (f) => perGame(f.blk, f.gp) },
     { label: 'Turnovers', low: true, get: (f) => perGame(f.tov, f.gp) },
     { label: 'True shooting', unit: '%', get: (f) => f.tsPct, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)) },
+    {
+      label: 'Shot quality', unit: '%', get: (f) => xShot.get(f.playerId)?.xEfg ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
+      title: 'Expected eFG%: what the league makes from the spots he shoots from',
+    },
+    {
+      label: 'Shot-making', signed: true, get: (f) => xShot.get(f.playerId)?.shotMaking ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
+      title: 'eFG% minus expected eFG%, in points: zero is an average shooter on his shots',
+    },
     { label: 'Three-point %', unit: '%', get: (f) => f.fg3Pct, floor: (f) => (f.fg3a ?? 0) >= scaledFloor(100, gamesOf(f)) },
     { label: 'Free throw %', unit: '%', get: (f) => f.ftPct, floor: (f) => f.fta >= scaledFloor(100, gamesOf(f)) },
     { label: 'Usage', unit: '%', get: (f) => f.usgPct },
@@ -158,10 +178,10 @@ export default async function PlayerPage({
       const pool = qualified.filter((f) => !m.floor || m.floor(f)).map(m.get).filter((v): v is number => v !== null);
       if (pool.length < 2) continue;
       const pct = percentileOf(mine, pool, m.low);
-      const value = fmt(mine, m.dp ?? 1, m.unit);
+      const value = `${m.signed && mine > 0 ? '+' : ''}${fmt(mine, m.dp ?? 1, m.unit)}`;
       ranks.push({
         label: m.label, value, pct,
-        title: `${m.label}: ${value}, ${ordinal(pct)} percentile of ${pool.length} qualified players`,
+        title: `${m.title ?? m.label}: ${value}, ${ordinal(pct)} percentile of ${pool.length} qualified players`,
       });
     }
   }
@@ -219,11 +239,11 @@ export default async function PlayerPage({
     };
   });
 
-  const realShots = shots.some((s) => s.eventNum !== null);
+  const myX = xShot.get(id);
   const shotNote = !season
     ? ''
     : realShots
-      ? `${shots.length} attempts, each one real, from the NBA's play-by-play`
+      ? `${shots.length} attempts, each one real, from the NBA's play-by-play${myX ? `. ${fmt(myX.efg)} eFG% on shots the league makes at ${fmt(myX.xEfg)}` : ''}`
       : shots.length
         ? `${shots.length} attempts, derived: drawn to match his published shooting splits by distance`
         : season.endYear < 1997

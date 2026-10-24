@@ -135,6 +135,13 @@ assert.deepEqual(
   },
   "Brunson's opening three",
 );
+// The CDN sometimes sends a field goal with no location (xLegacy: null, as in
+// 0022600097); a null x fails the insert and loses the whole box score.
+assert.equal(
+  shotsFromPbp({ actions: [...pbp.actions, { ...pbp.actions.find((a: any) => a.isFieldGoal === 1), xLegacy: null, yLegacy: null }] }).length,
+  shots.length,
+  'a shot without a location is skipped',
+);
 // Left and right must agree with the NBA's own labels, or every corner three
 // on the site lands in the wrong corner.
 for (const label of ['Left Corner 3', 'Right Corner 3', 'Above the Break 3']) {

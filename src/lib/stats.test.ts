@@ -4,7 +4,7 @@ import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
-  careerAdvanced, careerTotals, minGames, percentileOf, pythagWins, scaledFloor, standings,
+  careerAdvanced, careerTotals, expectedShooting, minGames, percentileOf, pythagWins, scaledFloor, standings,
 } from './stats';
 import { ordinal } from './format';
 
@@ -126,6 +126,32 @@ assert.equal(shotZone(0, 150).zone, 'Mid-Range', 'mid-range');
 assert.equal(shotZone(230, 200).value, 3, 'deep wing is a three');
 // A shot 22ft out but above the break is still a two.
 assert.equal(shotZone(0, 220).value, 2, 'inside the arc above the break');
+
+// --- Expected shooting ----------------------------------------------------
+// League: 36 of 60 at the rim (60%), 14 of 40 from 25 feet (35%).
+// A takes 10 of each and makes 8 and 5: expected 12 + 10.5 = 22.5 points on
+// 20 shots, a 56.25 xeFG%, against 31 points, 77.5 eFG%.
+const xs = expectedShooting([
+  { playerId: 1, value: 2, distanceFt: 2, made: true, n: 8 },
+  { playerId: 1, value: 2, distanceFt: 2, made: false, n: 2 },
+  { playerId: 1, value: 3, distanceFt: 25, made: true, n: 5 },
+  { playerId: 1, value: 3, distanceFt: 25, made: false, n: 5 },
+  { playerId: 2, value: 2, distanceFt: 2, made: true, n: 28 },
+  { playerId: 2, value: 2, distanceFt: 2, made: false, n: 22 },
+  { playerId: 2, value: 3, distanceFt: 25, made: true, n: 9 },
+  { playerId: 2, value: 3, distanceFt: 25, made: false, n: 21 },
+]);
+near(xs.get(1)!.xEfg, 56.25, 0.001, 'expected eFG% from the league rate at each spot');
+near(xs.get(1)!.efg, 77.5, 0.001, 'actual eFG% from the same shots');
+near(xs.get(1)!.shotMaking, 21.25, 0.001, 'shot-making is the gap');
+// Over the whole league, makes above expectation and below cancel out.
+near([...xs.values()].reduce((s, p) => s + p.shotMaking * p.fga, 0), 0, 1e-9, 'league shot-making nets to zero');
+// Every shot from 30 feet out is one heave bucket: 1 of 2 there makes each 50%.
+const heave = expectedShooting([
+  { playerId: 1, value: 3, distanceFt: 31, made: true, n: 1 },
+  { playerId: 2, value: 3, distanceFt: 45, made: false, n: 1 },
+]);
+near(heave.get(2)!.xEfg, 75, 0.001, 'heaves share a bucket');
 
 // --- Standings ------------------------------------------------------------
 near(winPct(60, 22), 0.7317, 0.0001, 'winning percentage');

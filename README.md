@@ -146,6 +146,8 @@ lines that straddle 1973-74.
 
 - **Exact** (basketball-reference definitions): TS%, eFG%, USG%, AST%, REB%, STL%, BLK%, TOV%,
   possessions, pace, team ORtg/DRtg, PER, Pythagorean wins (exponent 14).
+- **Expected shooting** (2026-27 on, from real shots): shot quality is the eFG% the league makes from
+  the spots a player shoots from (shot value and distance to the foot); shot-making is his eFG% minus that.
 - **Approximated**, with the shortcut named in a comment on each function: individual ORtg/DRtg, Win
   Shares and BPM. The site shows the published PER/WS/BPM/VORP; the only approximations on screen are
   individual ORtg/DRtg, which nobody publishes, and they're left empty before 1973-74.

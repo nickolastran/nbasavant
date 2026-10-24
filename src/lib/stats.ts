@@ -274,6 +274,45 @@ export function shotZone(x: number, y: number): { zone: string; area: string; va
 export const pointsPerShot = (made: number, attempts: number, value: number) =>
   div(made * value, attempts);
 
+/** A count of one player's real shots from one spot, made or missed. */
+export type ShotGroup = { playerId: number; value: number; distanceFt: number; made: boolean; n: number };
+
+/**
+ * Expected eFG% (Savant's xwOBA idea, for shots): what the league makes from
+ * the spots a player shoots from, against what he makes. A spot is the shot's
+ * value and its distance to the foot, so a corner three and a 22-foot two are
+ * priced apart; 30 feet and out is one heave bucket. Shot-making is eFG% minus
+ * expected eFG%, in points: zero is an average shooter on his diet.
+ * ponytail: location only, no shot type, defender or clock. Add actionType to
+ * the spot once a season has enough shots to fill the buckets.
+ */
+export function expectedShooting(groups: ShotGroup[]) {
+  const spot = (g: ShotGroup) => `${g.value}:${Math.min(g.distanceFt, 30)}`;
+  const league = new Map<string, { made: number; att: number }>();
+  for (const g of groups) {
+    const b = league.get(spot(g)) ?? { made: 0, att: 0 };
+    b.att += g.n;
+    if (g.made) b.made += g.n;
+    league.set(spot(g), b);
+  }
+  const players = new Map<number, { fga: number; pts: number; xPts: number }>();
+  for (const g of groups) {
+    const b = league.get(spot(g))!;
+    const p = players.get(g.playerId) ?? { fga: 0, pts: 0, xPts: 0 };
+    p.fga += g.n;
+    if (g.made) p.pts += g.n * g.value;
+    p.xPts += (g.n * g.value * b.made) / b.att;
+    players.set(g.playerId, p);
+  }
+  return new Map(
+    [...players].map(([id, p]) => {
+      const efg = div(p.pts, 2 * p.fga) * 100;
+      const xEfg = div(p.xPts, 2 * p.fga) * 100;
+      return [id, { fga: p.fga, efg, xEfg, shotMaking: efg - xEfg }];
+    }),
+  );
+}
+
 // --- Standings ------------------------------------------------------------
 
 /** Standard normal CDF (Abramowitz-Stegun 7.1.26, error < 1.5e-7). */

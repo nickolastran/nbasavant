@@ -164,7 +164,8 @@ export function logsFromBox(game: any) {
  */
 export function shotsFromPbp(game: any) {
   return (game.actions as any[])
-    .filter((a) => a.isFieldGoal === 1)
+    // A few arrive with no location (xLegacy: null); they can't be charted.
+    .filter((a) => a.isFieldGoal === 1 && a.xLegacy != null && a.yLegacy != null)
     .map((a) => {
       const { min, sec } = clockParts(a.clock);
       const z = shotZone(a.xLegacy, a.yLegacy);
