@@ -223,6 +223,188 @@ export function playsFromPbp(game: any) {
   });
 }
 
+// --- Play-by-play -> lineups and the clutch -------------------------------------------
+
+/** "PT07M11.50S" -> 431.5 seconds left in the period. */
+export function clockSeconds(iso: string) {
+  const m = /PT(\d+)M([\d.]+)S/.exec(iso ?? '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+}
+
+const r1 = (x: number) => Math.round(x * 10) / 10;
+const periodLength = (p: number) => (p <= 4 ? 720 : 300);
+/** Seconds into the game at a period's clock reading. */
+const gameSeconds = (p: number, left: number) =>
+  Math.min(p - 1, 4) * 720 + Math.max(0, p - 5) * 300 + periodLength(p) - left;
+
+/** The NBA's clutch: the last five minutes of the fourth or overtime, the score within five. */
+export const isClutch = (period: number, left: number, margin: number) =>
+  period >= 4 && left <= 300 && Math.abs(margin) <= 5;
+
+/** One team's five on the floor, from one change to the next. */
+export type Stint = {
+  teamId: number; players: number[]; period: number; start: number; seconds: number;
+  pts: number; oppPts: number; poss: number; oppPoss: number; clutch: boolean;
+};
+/** One player's box line in a game's clutch minutes. */
+export type ClutchLine = {
+  playerId: number; teamId: number; pts: number; fgm: number; fga: number; fg3m: number; fg3a: number;
+  ftm: number; fta: number; reb: number; ast: number; stl: number; blk: number; tov: number;
+};
+
+type Tally = { pts: number; fga: number; fta: number; oreb: number; tov: number };
+const zero = (): Tally => ({ pts: 0, fga: 0, fta: 0, oreb: 0, tov: 0 });
+
+/**
+ * Every lineup stint and clutch line in a game. A stint ends at a substitution,
+ * a period's end, or the game going into or out of the clutch, so each one is
+ * wholly clutch or not. Possessions are Oliver's estimate over the stint.
+ *
+ * The feed names the first period's starters but not who starts the others:
+ * that's whoever does something in the period before being subbed in (or is
+ * subbed out first), topped up from the five who ended the last period.
+ * ponytail: a sixth "starter" (a technical on the bench) is dropped, first five win.
+ */
+export function stintsFromPbp(pbp: any, box: any) {
+  const home: number = box.homeTeam.teamId;
+  const away: number = box.awayTeam.teamId;
+  const teamOf = new Map<number, number>();
+  const ended = new Map<number, number[]>([[home, []], [away, []]]);
+  for (const t of [box.homeTeam, box.awayTeam])
+    for (const p of t.players) {
+      teamOf.set(p.personId, t.teamId);
+      if (p.starter === '1') ended.get(t.teamId)!.push(p.personId);
+    }
+  const opp = (team: number) => (team === home ? away : home);
+
+  const stints: Stint[] = [];
+  const clutch = new Map<number, ClutchLine>();
+  const cum: Record<number, Tally> = { [home]: zero(), [away]: zero() };
+  const actions = pbp.actions as any[];
+
+  for (const p of [...new Set(actions.map((a) => a.period as number))].sort((a, b) => a - b)) {
+    // At one clock reading every substitution goes last, so free throws after a
+    // mid-trip sub count for the five who were on for the foul. That matches the
+    // NBA's box-score +/- on 97% of player-games; the rest are a point or two off,
+    // because the NBA itself isn't consistent about it.
+    const acts = actions
+      .filter((a) => a.period === p)
+      .map((a, i) => ({ a, i, sub: a.actionType === 'substitution' ? 1 : 0 }))
+      .sort((x, y) => clockSeconds(y.a.clock) - clockSeconds(x.a.clock) || x.sub - y.sub || x.i - y.i)
+      .map((x) => x.a);
+    const lineup = new Map<number, Set<number>>();
+    for (const team of [home, away]) {
+      const seen = new Set<number>();
+      const on: number[] = [];
+      for (const a of acts) {
+        const sub = a.actionType === 'substitution';
+        for (const id of (sub ? [a.personId] : a.personIdsFilter ?? []) as number[]) {
+          if (teamOf.get(id) !== team || seen.has(id)) continue;
+          seen.add(id);
+          if (!(sub && a.subType === 'in')) on.push(id);
+        }
+      }
+      // Someone can play a whole period without touching the ball: keep last period's five.
+      for (const id of ended.get(team)!) if (on.length < 5 && !seen.has(id)) on.push(id);
+      lineup.set(team, new Set(p === 1 ? ended.get(team) : on.slice(0, 5)));
+    }
+
+    const margin = () => cum[home].pts - cum[away].pts;
+    let inClutch = isClutch(p, periodLength(p), margin());
+    const snap = () => ({ [home]: { ...cum[home] }, [away]: { ...cum[away] } });
+    const open = new Map<number, { start: number; snap: Record<number, Tally>; clutch: boolean }>();
+    const begin = (team: number, at: number) => open.set(team, { start: at, snap: snap(), clutch: inClutch });
+    const close = (team: number, at: number) => {
+      const o = open.get(team)!;
+      const d = (t: number, k: keyof Tally) => cum[t][k] - o.snap[t][k];
+      const poss = (t: number) => d(t, 'fga') + 0.44 * d(t, 'fta') - d(t, 'oreb') + d(t, 'tov');
+      const players = [...lineup.get(team)!].sort((a, b) => a - b);
+      // Mid-way through a batch of subs a lineup can be four or six for no time at all.
+      if (players.length === 5 && (at > o.start || d(team, 'pts') || d(opp(team), 'pts')))
+        stints.push({
+          teamId: team, players, period: p, start: r1(o.start), seconds: r1(at - o.start),
+          pts: d(team, 'pts'), oppPts: d(opp(team), 'pts'), poss: poss(team), oppPoss: poss(opp(team)), clutch: o.clutch,
+        });
+      begin(team, at);
+    };
+    begin(home, gameSeconds(p, periodLength(p)));
+    begin(away, gameSeconds(p, periodLength(p)));
+
+    let lastLeft = periodLength(p);
+    for (const a of acts) {
+      const left = clockSeconds(a.clock);
+      const now = gameSeconds(p, left);
+      if (isClutch(p, left, margin()) !== inClutch) {
+        // Into the clutch on the clock: the line is 5:00, not the next play.
+        const at = lastLeft > 300 && left <= 300 && !inClutch ? gameSeconds(p, 300) : now;
+        inClutch = !inClutch;
+        close(home, at);
+        close(away, at);
+      }
+      lastLeft = left;
+
+      const team = a.teamId as number;
+      if (a.actionType === 'substitution') {
+        if (!lineup.has(team)) continue;
+        close(team, now);
+        if (a.subType === 'in') lineup.get(team)!.add(a.personId);
+        else lineup.get(team)!.delete(a.personId);
+        continue;
+      }
+      const made = a.shotResult === 'Made';
+      if (cum[team]) {
+        if (a.isFieldGoal === 1) cum[team].fga++;
+        if (a.actionType === 'freethrow') cum[team].fta++;
+        if (a.actionType === 'rebound' && a.subType === 'offensive') cum[team].oreb++;
+        if (a.actionType === 'turnover') cum[team].tov++;
+      }
+      if (inClutch && teamOf.has(a.personId)) {
+        const line = (id: number) => {
+          if (!clutch.has(id))
+            clutch.set(id, {
+              playerId: id, teamId: teamOf.get(id)!, pts: 0, fgm: 0, fga: 0, fg3m: 0, fg3a: 0,
+              ftm: 0, fta: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0,
+            });
+          return clutch.get(id)!;
+        };
+        const l = line(a.personId);
+        if (a.isFieldGoal === 1) {
+          const three = a.actionType === '3pt';
+          l.fga++;
+          if (three) l.fg3a++;
+          if (made) {
+            l.fgm++;
+            l.pts += three ? 3 : 2;
+            if (three) l.fg3m++;
+            if (teamOf.has(a.assistPersonId)) line(a.assistPersonId).ast++;
+          }
+        }
+        if (a.actionType === 'freethrow') {
+          l.fta++;
+          if (made) { l.ftm++; l.pts++; }
+        }
+        if (a.actionType === 'rebound') l.reb++;
+        if (a.actionType === 'turnover') l.tov++;
+        if (a.actionType === 'steal') l.stl++;
+        if (a.actionType === 'block') l.blk++;
+      }
+      cum[home].pts = Number(a.scoreHome) || cum[home].pts;
+      cum[away].pts = Number(a.scoreAway) || cum[away].pts;
+      // A basket that brings it within five (or takes it out) moves the line right here.
+      if (isClutch(p, left, margin()) !== inClutch) {
+        inClutch = !inClutch;
+        close(home, now);
+        close(away, now);
+      }
+    }
+    const end = gameSeconds(p, 0);
+    close(home, end);
+    close(away, end);
+    for (const team of [home, away]) ended.set(team, [...lineup.get(team)!]);
+  }
+  return { stints, clutch: [...clutch.values()] };
+}
+
 export type Leader = { playerId: number; name: string; jersey?: string | null; pts: number; reb: number; ast: number };
 /** What `games.leaders` holds. */
 export type GameLeaders = { home: Leader | null; away: Leader | null };

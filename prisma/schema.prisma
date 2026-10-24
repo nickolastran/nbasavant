@@ -27,6 +27,8 @@ model Season {
   games         Game[]
   shots         ShotData[]
   gameLogs      PlayerGameLog[]
+  stints        Stint[]
+  clutchLogs    ClutchLog[]
 
   @@index([startYear])
   @@map("seasons")
@@ -48,10 +50,12 @@ model Team {
   teamSplits   TeamSplitStats[]
   playerStats  PlayerStats[]
   splitStats   SplitStats[]
-  homeGames    Game[]          @relation("home")
-  awayGames    Game[]          @relation("away")
+  homeGames    Game[]           @relation("home")
+  awayGames    Game[]           @relation("away")
   gameLogs     PlayerGameLog[]
   shots        ShotData[]
+  stints       Stint[]
+  clutchLogs   ClutchLog[]
   transactions Transaction[]
 
   @@index([conference, division])
@@ -88,6 +92,7 @@ model Player {
   gameLogs      PlayerGameLog[]
   shots         ShotData[]
   defendedShots ShotData[]      @relation("defender")
+  clutchLogs    ClutchLog[]
 
   @@index([fullName])
   @@index([teamId, active])
@@ -263,8 +268,10 @@ model Game {
   /// Where to watch and listen, from the NBA schedule: {"tv": ["ESPN"], "radio": ["SiriusXM", ...]}.
   broadcast  Json?
 
-  gameLogs PlayerGameLog[]
-  shots    ShotData[]
+  gameLogs   PlayerGameLog[]
+  shots      ShotData[]
+  stints     Stint[]
+  clutchLogs ClutchLog[]
 
   @@index([date(sort: Desc)])
   @@index([seasonId, date(sort: Desc)])
@@ -315,27 +322,27 @@ model PlayerGameLog {
 /// Real shots (2026-27 on) carry the play-by-play `eventNum`; derived ones
 /// (sampled to match a season's published shooting splits) leave it null.
 model ShotData {
-  id         Int      @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   playerId   Int
   gameId     Int
   seasonId   Int
   teamId     Int
   defenderId Int?
   eventNum   Int?
-  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  game       Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  season     Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  team       Team     @relation(fields: [teamId], references: [id])
-  defender   Player?  @relation("defender", fields: [defenderId], references: [id])
+  player     Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  game       Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  season     Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team       Team    @relation(fields: [teamId], references: [id])
+  defender   Player? @relation("defender", fields: [defenderId], references: [id])
 
   x          Int
   y          Int
   distanceFt Int
   made       Boolean
-  value      Int      // 2 or 3
-  zone       String   // "Restricted Area", "Above the Break 3", ...
-  zoneArea   String   // "Center(C)", "Left Side(L)", ...
-  actionType String   // "Jump Shot", "Driving Layup", ...
+  value      Int // 2 or 3
+  zone       String // "Restricted Area", "Above the Break 3", ...
+  zoneArea   String // "Center(C)", "Left Side(L)", ...
+  actionType String // "Jump Shot", "Driving Layup", ...
   period     Int
   minsLeft   Int
   secsLeft   Int
@@ -480,4 +487,65 @@ model Transaction {
   @@index([teamId, date(sort: Desc)])
   @@index([playerId])
   @@map("transactions")
+}
+
+/// One team's five on the floor, from one change to the next: a substitution,
+/// a period's end, or the game going into or out of the clutch. Real
+/// play-by-play, so 2026-27 regular season on.
+model Stint {
+  id       Int    @id @default(autoincrement())
+  gameId   Int
+  seasonId Int
+  teamId   Int
+  game     Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team     Team   @relation(fields: [teamId], references: [id])
+
+  /// The five person ids, ascending, so a lineup is the same array every time.
+  players Int[]
+  period  Int
+  /// Seconds into the game it began, and how long it lasted.
+  start   Float
+  seconds Float
+  pts     Int
+  oppPts  Int
+  /// Oliver's possession estimate over the stint, each side.
+  poss    Float
+  oppPoss Float
+  /// Last five minutes of the fourth or overtime, the score within five.
+  clutch  Boolean
+
+  @@index([seasonId, teamId])
+  @@index([gameId])
+  @@map("stints")
+}
+
+/// A player's box line in one game's clutch minutes (minutes and +/- come from stints).
+model ClutchLog {
+  id       Int    @id @default(autoincrement())
+  playerId Int
+  gameId   Int
+  seasonId Int
+  teamId   Int
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  game     Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team     Team   @relation(fields: [teamId], references: [id])
+
+  pts  Int
+  fgm  Int
+  fga  Int
+  fg3m Int
+  fg3a Int
+  ftm  Int
+  fta  Int
+  reb  Int
+  ast  Int
+  stl  Int
+  blk  Int
+  tov  Int
+
+  @@unique([playerId, gameId])
+  @@index([seasonId, playerId])
+  @@map("clutch_logs")
 }

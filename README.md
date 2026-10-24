@@ -48,9 +48,9 @@ docker compose up -d db
 | `/standings` | Conference / division / league. W-L, GB, home, road, division, conference, PPG, streak, L10, Pythagorean xW-L, net rating, for any season |
 | `/leaders` | Sixteen leaderboards (per game, shooting, PER/BPM/WS/VORP) and a Team Leaders view |
 | `/players` | Per game / totals / advanced for every player-season |
-| `/players/[id]` | Bio and headshot, Savant percentile rankings, averages/totals/advanced with career row, shot chart, game log, transactions |
+| `/players/[id]` | Bio and headshot, Savant percentile rankings, averages/totals/advanced with career row, shot chart, on/off and clutch, game log, transactions |
 | `/team-stats` | Per game and advanced (ratings, four factors) |
-| `/teams`, `/teams/[abbr]` | Every franchise: record, leaders, league percentiles, roster, schedule, transactions, every season |
+| `/teams`, `/teams/[abbr]` | Every franchise: record, leaders, league percentiles, roster, five-man lineups, schedule, transactions, every season |
 | `/transactions` | Signings, waivers, trades (grouped), claims, by season, team and type |
 | `/explorer`, `/compare`, `/shots` | Stat explorer with export, players side by side, shot chart analyzer |
 | `/api-docs` | Swagger UI over the public API |
@@ -90,6 +90,11 @@ A few things worth knowing:
 - **Game logs and box scores start with 2026-27** (older seasons have final scores only). The NBA's CDN
   archive reaches back to 2019-20 and its stats API has game logs to 1946-47 and shot locations to 1996-97;
   backfilling either is a storage question, not a code one (see below).
+- **Lineups, on/off and clutch come from the play-by-play** (2026-27 on). Each game is cut into stints, one
+  per team per stretch with the same five on the floor; the feed doesn't say who starts the second half, so
+  it's whoever acts in a period before being subbed in. Floor time matches the box score to the second, and
+  +/- matches on 97% of player-games (the NBA is inconsistent about free throws around a substitution). The
+  clutch is the NBA's: last five minutes of the fourth or overtime, within five.
 - A traded player's season is his combined line, filed under his last team, the way nba.com shows it.
 - ABA seasons (1967-76) aren't included: they're not NBA stats.
 
@@ -99,7 +104,8 @@ A few things worth knowing:
 so one source being down doesn't stop the rest:
 
 1. **schedule**: new games (Cup knockouts and playoffs appear as they're set), moved tip-offs, finals
-2. **finals**: box scores and real shots for the last three days' games (catches stat corrections).
+2. **finals**: box scores, real shots, lineup stints and clutch lines for the last three days' games (catches
+   stat corrections), and any regular-season final still missing its stints.
    Preseason and playoff games keep their box scores too; a preseason final also rebuilds that
    preseason's totals
 3. **playoffs**: this season's playoff totals and advanced metrics, players and teams, from

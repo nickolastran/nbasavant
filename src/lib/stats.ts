@@ -85,6 +85,23 @@ export const tovPct = (b: Pick<BoxTotals, 'tov' | 'fga' | 'fta'>) =>
 export const possessions = (b: BoxTotals) =>
   b.fga + 0.44 * b.fta - b.oreb + b.tov;
 
+/**
+ * Minutes, +/- and ratings over some lineup stints. Possessions are the two
+ * sides' estimates averaged, as team ratings are, so ORtg - DRtg is the net.
+ */
+export function stintRatings(stints: { seconds: number; pts: number; oppPts: number; poss: number; oppPoss: number }[]) {
+  let seconds = 0, pts = 0, oppPts = 0, poss = 0;
+  for (const s of stints) {
+    seconds += s.seconds;
+    pts += s.pts;
+    oppPts += s.oppPts;
+    poss += (s.poss + s.oppPoss) / 2;
+  }
+  const ortg = poss ? (pts / poss) * 100 : null;
+  const drtg = poss ? (oppPts / poss) * 100 : null;
+  return { min: seconds / 60, pts, oppPts, plusMinus: pts - oppPts, poss, ortg, drtg, net: ortg === null ? null : ortg - drtg! };
+}
+
 /** Possessions per 48 minutes. `min` is total team minutes (5 * game minutes). */
 export const pace = (b: TeamTotals) => div(possessions(b) * 48 * 5, b.min);
 

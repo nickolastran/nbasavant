@@ -10,7 +10,7 @@ import { StatTable, type Col } from '@/components/StatTable';
 import { TrendChart } from '@/components/TrendChart';
 import { ViewTabs } from '@/components/ViewTabs';
 import { feetInches, fmt, ordinal, perGame } from '@/lib/format';
-import { careerAdvanced, careerTotals, expectedShooting, minGames, percentileOf, scaledFloor, type SeasonLine } from '@/lib/stats';
+import { careerAdvanced, careerTotals, expectedShooting, minGames, percentileOf, scaledFloor, stintRatings, type SeasonLine } from '@/lib/stats';
 
 export const revalidate = 60;
 
@@ -132,6 +132,31 @@ export default async function PlayerPage({
         })).map((g) => ({ ...g, n: g._count })),
       )
     : expectedShooting([]);
+
+  // --- On/off and the clutch, from his teams' lineup stints (2026-27 on) ------
+  const teamIds = [...new Set(logs.map((l) => l.teamId))];
+  const [teamStints, clutchSum] = season && teamIds.length
+    ? await Promise.all([
+        prisma.stint.findMany({
+          where: { seasonId: season.id, teamId: { in: teamIds } },
+          select: { players: true, gameId: true, seconds: true, pts: true, oppPts: true, poss: true, oppPoss: true, clutch: true },
+        }),
+        prisma.clutchLog.aggregate({
+          where: { seasonId: season.id, playerId: id },
+          _sum: { pts: true, fgm: true, fga: true, fg3m: true, fg3a: true, ftm: true, fta: true, reb: true, ast: true, tov: true },
+        }),
+      ])
+    : [[], null];
+  const onCourt = teamStints.filter((s) => s.players.includes(id));
+  const onOff = onCourt.length
+    ? [
+        { label: 'On court', ...stintRatings(onCourt) },
+        { label: 'Off court', ...stintRatings(teamStints.filter((s) => !s.players.includes(id))) },
+      ]
+    : [];
+  const clutchOn = onCourt.filter((s) => s.clutch);
+  const clutchR = stintRatings(clutchOn);
+  const cs = clutchSum?._sum;
 
   // --- Percentile rankings against the qualified field -----------------------
   // Each player qualifies on his own team's games (as /leaders does): early on,
@@ -357,6 +382,80 @@ export default async function PlayerPage({
           </div>
         )}
       </section>
+
+      {onOff.length > 0 && (
+        <section className="grid gap-5 lg:grid-cols-2">
+          <div>
+            <h2 className="mb-2 text-sm font-semibold">On/off, {season?.key}</h2>
+            <div className="panel overflow-x-auto">
+              <table className="stat-table">
+                <thead>
+                  <tr>
+                    {['', 'MIN', '+/-', 'ORtg', 'DRtg', 'Net'].map((h) => (
+                      <th key={h} style={{ cursor: 'default' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {onOff.map((r) => (
+                    <tr key={r.label}>
+                      <td>{r.label}</td>
+                      <td>{fmt(r.min, 0)}</td>
+                      <td>{r.plusMinus > 0 ? `+${r.plusMinus}` : r.plusMinus}</td>
+                      <td>{fmt(r.ortg)}</td>
+                      <td>{fmt(r.drtg)}</td>
+                      <td>{fmt(r.net)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-bold" style={{ background: 'var(--panel-2)' }}>
+                    <td className="px-2 py-2 text-left" colSpan={5}>On − off, net rating</td>
+                    <td className="tnum px-2 py-2 text-right">
+                      {onOff[0].net !== null && onOff[1].net !== null
+                        ? `${onOff[0].net - onOff[1].net > 0 ? '+' : ''}${fmt(onOff[0].net - onOff[1].net)}`
+                        : '—'}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="mt-2 text-xs" style={{ color: 'var(--ink-3)' }}>
+              His team per 100 possessions with him on the floor and without him.
+            </p>
+          </div>
+          <div>
+            <h2 className="mb-2 text-sm font-semibold">Clutch, {season?.key}</h2>
+            {clutchOn.length ? (
+              <dl className="panel flex flex-wrap gap-x-6 gap-y-3 p-4">
+                {[
+                  ['Games', String(new Set(clutchOn.map((s) => s.gameId)).size)],
+                  ['MIN', fmt(clutchR.min)],
+                  ['PTS', String(cs?.pts ?? 0)],
+                  ['FG', `${cs?.fgm ?? 0}-${cs?.fga ?? 0}`],
+                  ['3P', `${cs?.fg3m ?? 0}-${cs?.fg3a ?? 0}`],
+                  ['FT', `${cs?.ftm ?? 0}-${cs?.fta ?? 0}`],
+                  ['REB', String(cs?.reb ?? 0)],
+                  ['AST', String(cs?.ast ?? 0)],
+                  ['TOV', String(cs?.tov ?? 0)],
+                  ['+/-', clutchR.plusMinus > 0 ? `+${clutchR.plusMinus}` : String(clutchR.plusMinus)],
+                  ['Net', fmt(clutchR.net)],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="eyebrow">{label}</dt>
+                    <dd className="tnum text-lg font-bold">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="panel p-4 text-sm" style={{ color: 'var(--ink-3)' }}>No clutch minutes yet this season.</p>
+            )}
+            <p className="mt-2 text-xs" style={{ color: 'var(--ink-3)' }}>
+              The NBA&apos;s clutch: the last five minutes of the fourth or overtime, the score within five.
+            </p>
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">

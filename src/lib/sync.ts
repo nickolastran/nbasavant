@@ -9,7 +9,7 @@ import { TEAMS } from '../../prisma/teams';
 import { fetchPlayoffs, fetchSeason, nn, type PlayerSeason, type TeamSeason } from './bref';
 import { shiftDay, todayEt } from './dates';
 import { matcher, resolvePlayer } from './identity';
-import { FEEDS, broadcastOf, gameKind, inches, lineOf, logsFromBox, nbaJson, rowsOf, shotsFromPbp, topOf, type GameLeaders } from './nba';
+import { FEEDS, broadcastOf, gameKind, inches, lineOf, logsFromBox, nbaJson, rowsOf, shotsFromPbp, stintsFromPbp, topOf, type GameLeaders } from './nba';
 import {
   LEAGUE_2024_25, boxPlusMinus, centerBpm, efgPct, playerDrtg, playerOrtg, tsPct, vorp,
   type BoxTotals, type SeasonLine, type TeamTotals,
@@ -368,7 +368,8 @@ export async function syncSchedule(db: PrismaClient) {
 
 /**
  * Save one finished game: final score and player lines, and for regular-season
- * games every real shot (the shot charts are regular season). A preseason game
+ * games every real shot (the shot charts are regular season), lineup stint and
+ * clutch line. A preseason game
  * also refreshes that preseason's totals.
  */
 export async function syncGame(db: PrismaClient, gameCode: string) {
@@ -393,6 +394,8 @@ export async function syncGame(db: PrismaClient, gameCode: string) {
 
   const where = { gameId: game.id };
   const stamp = { gameId: game.id, seasonId: game.seasonId, date: game.date };
+  const lineups = game.kind === 'regular' ? stintsFromPbp(pbp, box) : null;
+  const ids = { gameId: game.id, seasonId: game.seasonId };
   await db.$transaction([
     db.game.update({
       where: { id: game.id },
@@ -413,6 +416,14 @@ export async function syncGame(db: PrismaClient, gameCode: string) {
           db.shotData.createMany({ data: shotsFromPbp(pbp).map((s) => ({ ...s, ...stamp })), skipDuplicates: true }),
         ]
       : []),
+    ...(lineups
+      ? [
+          db.stint.deleteMany({ where }),
+          db.stint.createMany({ data: lineups.stints.map((s) => ({ ...s, ...ids })) }),
+          db.clutchLog.deleteMany({ where }),
+          db.clutchLog.createMany({ data: lineups.clutch.map((c) => ({ ...c, ...ids })) }),
+        ]
+      : []),
   ]);
   if (game.kind === 'preseason') await syncPreseason(db, game.seasonId);
   return `${gameCode}: ${logs.length} lines`;
@@ -427,6 +438,7 @@ export async function syncFinals(db: PrismaClient) {
       OR: [
         { date: { gte: new Date(`${shiftDay(todayEt(), -3)}T00:00:00Z`) } },
         { gameLogs: { none: {} } },
+        { kind: 'regular', stints: { none: {} } },
       ],
     },
     select: { gameCode: true },

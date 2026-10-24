@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { legacyId, matcher, normName, resolvePlayer } from './identity';
-import { benchReason, clockParts, gameKind, inches, lineOf, logsFromBox, minutesPlayed, playsFromPbp, shotsFromPbp, topOf } from './nba';
+import { benchReason, clockParts, clockSeconds, gameKind, inches, isClutch, lineOf, logsFromBox, minutesPlayed, playsFromPbp, shotsFromPbp, stintsFromPbp, topOf } from './nba';
 import { alignment, cupFinal, nn, pctOf, seasonLine, seasonPath, teamIdFor } from './bref';
 import { localTip, shiftDay, tipAt, todayEt } from './dates';
 import { displayName, rowsFromWords, type Word } from './injuries';
@@ -294,5 +294,37 @@ assert.deepEqual(
 );
 assert.equal(injuryRows[0].date, '10/22/2026', 'report date carries');
 assert.equal(displayName('Butler III, Jimmy'), 'Jimmy Butler III', 'suffix after the surname');
+
+// --- NBA feed: play-by-play -> lineup stints and clutch lines ----------------------
+// CHI 132, MIL 125 (0022600099), trimmed to the fields the parser reads. The box
+// score is the answer key: every player's minutes and +/- must come out of the stints.
+assert.equal(clockSeconds('PT07M11.50S'), 431.5, 'clock to seconds, tenths kept');
+assert.ok(isClutch(4, 300, -5) && isClutch(5, 120, 3), 'last five of the fourth or OT, within five');
+assert.ok(!isClutch(4, 301, 0) && !isClutch(3, 60, 0) && !isClutch(4, 60, 6), 'not the clutch');
+{
+  const box = fixture('boxscore_0022600099.json').game;
+  const { stints, clutch } = stintsFromPbp(fixture('playbyplay_0022600099.json').game, box);
+  assert.ok(stints.every((s) => s.players.length === 5), 'five on the floor, always');
+  for (const t of [box.homeTeam, box.awayTeam]) {
+    const mine = stints.filter((s) => s.teamId === t.teamId);
+    near(mine.reduce((a, s) => a + s.seconds, 0), 48 * 60, 0.01, `${t.teamTricode} stints cover the game`);
+    assert.equal(mine.reduce((a, s) => a + s.pts, 0), t.score, `${t.teamTricode} stints add up to the final`);
+    for (const p of t.players.filter((p: any) => p.played === '1')) {
+      const on = mine.filter((s) => s.players.includes(p.personId));
+      near(on.reduce((a, s) => a + s.seconds, 0), minutesPlayed(p.statistics.minutes) * 60, 1, `${p.nameI} minutes`);
+      assert.equal(on.reduce((a, s) => a + s.pts - s.oppPts, 0), p.statistics.plusMinusPoints, `${p.nameI} +/-`);
+    }
+  }
+  // MIL trailed 111-117 at 5:06; Jaquez's dunk at 4:56 made it four, and the clutch.
+  assert.equal(Math.min(...stints.filter((s) => s.clutch).map((s) => s.start)), 48 * 60 - 296, 'clutch starts on the dunk');
+  // Herro from 4:56 on, read off the play-by-play: threes at 4:26 and 3:56, 1 of 2 on
+  // the flagrant, misses at 3:48 (3), 3:08, 1:23 and 0:28.7 (3), a rebound, a
+  // turnover. His floater at 0:05.8 came down seven, out of the clutch.
+  assert.deepEqual(
+    clutch.find((c) => c.playerId === 1629639),
+    { playerId: 1629639, teamId: 1610612749, pts: 7, fgm: 2, fga: 6, fg3m: 2, fg3a: 4, ftm: 1, fta: 2, reb: 1, ast: 0, stl: 0, blk: 0, tov: 1 },
+    "Herro's clutch line",
+  );
+}
 
 console.log('feeds: all checks passed');

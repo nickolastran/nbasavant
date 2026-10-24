@@ -4,11 +4,12 @@ import { Suspense } from 'react';
 import { byRecord, latestSeason, prisma, seasonStandings } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
 import { PercentileBars, type Percentile } from '@/components/PercentileBars';
+import { StatTable } from '@/components/StatTable';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
 import { todayEt } from '@/lib/dates';
 import { feetInches, fmt, ordinal, pct3, perGame } from '@/lib/format';
-import { minGames, percentileOf } from '@/lib/stats';
+import { minGames, percentileOf, stintRatings } from '@/lib/stats';
 
 export const revalidate = 60;
 
@@ -158,6 +159,26 @@ export default async function TeamPage({
         return [{ label: r.label, value, pct, title: `${r.label}: ${value}, ${ordinal(pct)} percentile of ${field.length} teams` }];
       })
     : [];
+
+  // Five-man lineups from the play-by-play (2026-27 on), most-used first.
+  const stints = await prisma.stint.findMany({
+    where: { seasonId: season.id, teamId: team.id },
+    select: { players: true, gameId: true, seconds: true, pts: true, oppPts: true, poss: true, oppPoss: true },
+  });
+  const surnames = new Map(
+    (await prisma.player.findMany({ where: { id: { in: [...new Set(stints.flatMap((s) => s.players))] } }, select: { id: true, lastName: true } }))
+      .map((p) => [p.id, p.lastName]),
+  );
+  const byLineup = new Map<string, typeof stints>();
+  for (const s of stints) byLineup.set(s.players.join(), [...(byLineup.get(s.players.join()) ?? []), s]);
+  const lineups = [...byLineup.values()].map((group) => {
+    const r = stintRatings(group);
+    return {
+      lineup: group[0].players.map((id) => surnames.get(id) ?? id).join(' · '),
+      gp: new Set(group.map((s) => s.gameId)).size,
+      min: r.min, plusMinus: r.plusMinus, ortg: r.ortg, drtg: r.drtg, net: r.net,
+    };
+  });
 
   const seasonLabel = (g: (typeof games)[number]) =>
     g.kind === 'preseason' ? 'Preseason' : g.kind === 'playoffs' ? 'Playoffs' : g.kind === 'play-in' ? 'Play-In' : g.label;
@@ -334,6 +355,33 @@ export default async function TeamPage({
           </div>
         </div>
       </section>
+
+      {lineups.length > 0 && (
+        <section>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-bold tracking-tight">Lineups</h2>
+            <span className="text-xs" style={{ color: 'var(--ink-3)' }}>
+              Every five-man unit, from the play-by-play. Ratings per 100 possessions; small samples swing hard.
+            </span>
+          </div>
+          <StatTable
+            rows={lineups}
+            cols={[
+              { key: 'lineup', label: 'Lineup' },
+              { key: 'gp', label: 'GP' },
+              { key: 'min', label: 'MIN', dp: 1 },
+              { key: 'plusMinus', label: '+/-', shade: true },
+              { key: 'ortg', label: 'ORtg', dp: 1, shade: true },
+              { key: 'drtg', label: 'DRtg', dp: 1, shade: true, lowerIsBetter: true },
+              { key: 'net', label: 'Net', dp: 1, shade: true },
+            ]}
+            initialSort="min"
+            filename={`${team.abbreviation}-lineups-${season.key}`}
+            pageSize={10}
+            empty="No lineups yet."
+          />
+        </section>
+      )}
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <div>

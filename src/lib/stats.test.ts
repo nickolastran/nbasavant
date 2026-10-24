@@ -4,7 +4,7 @@ import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
-  careerAdvanced, careerTotals, expectedShooting, minGames, percentileOf, pythagWins, scaledFloor, standings,
+  careerAdvanced, careerTotals, expectedShooting, stintRatings, minGames, percentileOf, pythagWins, scaledFloor, standings,
 } from './stats';
 import { ordinal } from './format';
 
@@ -126,6 +126,17 @@ assert.equal(shotZone(0, 150).zone, 'Mid-Range', 'mid-range');
 assert.equal(shotZone(230, 200).value, 3, 'deep wing is a three');
 // A shot 22ft out but above the break is still a two.
 assert.equal(shotZone(0, 220).value, 2, 'inside the arc above the break');
+
+// --- Lineup stints ---------------------------------------------------------
+// 12 minutes, 30-24 on 25 and 23 possessions (24 averaged): 125 / 100 per 100.
+const sr = stintRatings([
+  { seconds: 400, pts: 20, oppPts: 10, poss: 15, oppPoss: 14 },
+  { seconds: 320, pts: 10, oppPts: 14, poss: 10, oppPoss: 9 },
+]);
+assert.deepEqual([sr.min, sr.plusMinus, sr.poss], [12, 6, 24], 'stint minutes, +/-, possessions');
+near(sr.ortg!, 125, 1e-9, 'stint ORtg');
+near(sr.net!, 25, 1e-9, 'stint net rating');
+assert.equal(stintRatings([]).net, null, 'no possessions, no rating');
 
 // --- Expected shooting ----------------------------------------------------
 // League: 36 of 60 at the rim (60%), 14 of 40 from 25 feet (35%).
