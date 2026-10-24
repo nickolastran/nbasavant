@@ -328,6 +328,8 @@ model ShotData {
   seasonId   Int
   teamId     Int
   defenderId Int?
+  /// Who assisted a made shot, from the play-by-play (real shots only).
+  assistId   Int?
   eventNum   Int?
   player     Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
   game       Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)

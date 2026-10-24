@@ -1,6 +1,6 @@
 import type { Percentile } from '@/components/PercentileBars';
 import { prisma } from '@/lib/db';
-import { fmt, ordinal } from '@/lib/format';
+import { fmt, ordinal, shortNames } from '@/lib/format';
 import { percentileOf, stintRatings } from '@/lib/stats';
 
 /** Team ratings with a direction; pace has none, so it's printed, not ranked. */
@@ -39,9 +39,8 @@ export async function teamLineups(seasonId: number, teamId: number) {
     where: { seasonId, teamId },
     select: { players: true, gameId: true, seconds: true, pts: true, oppPts: true, poss: true, oppPoss: true },
   });
-  const surnames = new Map(
-    (await prisma.player.findMany({ where: { id: { in: [...new Set(stints.flatMap((s) => s.players))] } }, select: { id: true, lastName: true } }))
-      .map((p) => [p.id, p.lastName]),
+  const surnames = shortNames(
+    await prisma.player.findMany({ where: { id: { in: [...new Set(stints.flatMap((s) => s.players))] } }, select: { id: true, firstName: true, lastName: true } }),
   );
   const byLineup = new Map<string, typeof stints>();
   for (const s of stints) byLineup.set(s.players.join(), [...(byLineup.get(s.players.join()) ?? []), s]);
@@ -53,4 +52,29 @@ export async function teamLineups(seasonId: number, teamId: number) {
       min: r.min, plusMinus: r.plusMinus, ortg: r.ortg, drtg: r.drtg, net: r.net,
     };
   });
+}
+
+/**
+ * Who assisted whom on a team's made shots (2026-27 on): each passer-scorer
+ * pair with its assists and the points they made. Players are ordered by how
+ * involved they are, passing plus finishing, and capped at `top`.
+ */
+export async function assistNetwork(seasonId: number, teamId: number, top = 10) {
+  const pairs = await prisma.shotData.groupBy({
+    by: ['assistId', 'playerId'],
+    where: { seasonId, teamId, assistId: { not: null } },
+    _count: { _all: true },
+    _sum: { value: true },
+  });
+  const involved = new Map<number, number>();
+  for (const p of pairs) {
+    involved.set(p.assistId!, (involved.get(p.assistId!) ?? 0) + p._count._all);
+    involved.set(p.playerId, (involved.get(p.playerId) ?? 0) + p._count._all);
+  }
+  const ids = [...involved.keys()].sort((a, b) => involved.get(b)! - involved.get(a)!).slice(0, top);
+  const names = shortNames(await prisma.player.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } }));
+  return {
+    players: ids.map((id) => ({ id, name: names.get(id) ?? String(id) })),
+    pairs: pairs.map((p) => ({ from: p.assistId!, to: p.playerId, ast: p._count._all, pts: p._sum.value ?? 0 })),
+  };
 }

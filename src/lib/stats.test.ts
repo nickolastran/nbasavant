@@ -7,7 +7,7 @@ import {
   careerAdvanced, careerTotals, expectedShooting, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
   activeStreak, nextMilestone, onPace,
 } from './stats';
-import { ordinal } from './format';
+import { ordinal, shortNames } from './format';
 
 const near = (a: number, b: number, eps = 0.05, msg = '') =>
   assert.ok(Math.abs(a - b) < eps, `${msg} expected ~${b}, got ${a}`);
@@ -359,5 +359,16 @@ assert.equal(winProbability(0, 0), 0.5, 'tie at the horn: overtime');
 assert.ok(winProbability(-9, 2280) < 0.35 && winProbability(-9, 2280) > 0.2, 'down 9 late in the first');
 assert.ok(winProbability(5, 60) > winProbability(5, 1440), 'a lead late beats the same lead at half');
 assert.ok(Math.abs(winProbability(4, 600) + winProbability(-4, 600, -2.5) - 1) < 1e-6, 'symmetric');
+
+// --- Short names -------------------------------------------------------------
+{
+  const names = shortNames([
+    { id: 1, firstName: 'Jalen', lastName: 'Williams' },
+    { id: 2, firstName: 'Jaylin', lastName: 'Williams' },
+    { id: 3, firstName: 'Kenrich', lastName: 'Williams' },
+    { id: 4, firstName: 'Alex', lastName: 'Caruso' },
+  ]);
+  assert.deepEqual([...names.values()], ['Jal. Williams', 'Jay. Williams', 'K. Williams', 'Caruso'], 'namesakes told apart, shortest prefix');
+}
 
 console.log('stats.ts: all checks passed');

@@ -439,6 +439,8 @@ export async function syncFinals(db: PrismaClient) {
         { date: { gte: new Date(`${shiftDay(todayEt(), -3)}T00:00:00Z`) } },
         { gameLogs: { none: {} } },
         { kind: 'regular', stints: { none: {} } },
+        // Saved before shots carried their assister.
+        { kind: 'regular', shots: { none: { assistId: { not: null } } } },
       ],
     },
     select: { gameCode: true },

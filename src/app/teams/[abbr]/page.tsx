@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { byRecord, latestSeason, prisma, seasonStandings } from '@/lib/db';
+import { AssistNetwork } from '@/components/AssistNetwork';
 import { FilterBar } from '@/components/FilterBar';
 import { PercentileBars } from '@/components/PercentileBars';
 import { StatTable } from '@/components/StatTable';
@@ -10,7 +11,7 @@ import { Tip } from '@/components/Tip';
 import { todayEt } from '@/lib/dates';
 import { feetInches, fmt, ordinal, pct3, perGame } from '@/lib/format';
 import { minGames } from '@/lib/stats';
-import { teamLineups, teamPercentiles } from '@/lib/team';
+import { assistNetwork, teamLineups, teamPercentiles } from '@/lib/team';
 
 export const revalidate = 60;
 
@@ -139,7 +140,7 @@ export default async function TeamPage({
   const ranks = teamPercentiles(team.id, ratingSource);
 
   // Five-man lineups from the play-by-play (2026-27 on).
-  const lineups = await teamLineups(season.id, team.id);
+  const [lineups, assists] = await Promise.all([teamLineups(season.id, team.id), assistNetwork(season.id, team.id)]);
 
   const seasonLabel = (g: (typeof games)[number]) =>
     g.kind === 'preseason' ? 'Preseason' : g.kind === 'playoffs' ? 'Playoffs' : g.kind === 'play-in' ? 'Play-In' : g.label;
@@ -341,6 +342,18 @@ export default async function TeamPage({
             pageSize={10}
             empty="No lineups yet."
           />
+        </section>
+      )}
+
+      {assists.players.length > 0 && (
+        <section>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-bold tracking-tight">Assist network</h2>
+            <span className="text-xs" style={{ color: 'var(--ink-3)' }}>
+              Who set up whom, from the play-by-play. The {assists.players.length} most involved players; hover a cell for points.
+            </span>
+          </div>
+          <AssistNetwork {...assists} />
         </section>
       )}
 

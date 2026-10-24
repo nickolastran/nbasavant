@@ -177,6 +177,7 @@ export function shotsFromPbp(game: any) {
         y: a.yLegacy as number,
         distanceFt: Math.round(Math.hypot(a.xLegacy, a.yLegacy) / 10),
         made: a.shotResult === 'Made',
+        assistId: (a.assistPersonId as number) || null,
         // The scorer's call, not the geometry: a toe on the line is a two.
         value: a.actionType === '3pt' ? 3 : 2,
         zone: z.zone,

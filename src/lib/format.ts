@@ -19,3 +19,23 @@ export const ordinal = (n: number) => {
   const v = n % 100;
   return `${n}${suffix[(v - 20) % 10] ?? suffix[v] ?? suffix[0]}`;
 };
+
+/**
+ * Surnames for a group of players, told apart where they clash: "Williams"
+ * alone, "Jal. Williams" / "Jay. Williams" when two share it, full names when
+ * even that doesn't separate them.
+ */
+export function shortNames(players: { id: number; firstName: string; lastName: string }[]) {
+  const count = (key: (p: (typeof players)[number]) => string, p: (typeof players)[number]) =>
+    players.filter((q) => key(q) === key(p)).length;
+  const prefix = (p: (typeof players)[number]) => {
+    const others = players.filter((q) => q.id !== p.id && q.lastName === p.lastName);
+    // The shortest start of the first name no namesake shares.
+    for (let n = 1; n <= p.firstName.length; n++) {
+      const start = p.firstName.slice(0, n);
+      if (others.every((q) => !q.firstName.startsWith(start))) return `${start}.`;
+    }
+    return p.firstName;
+  };
+  return new Map(players.map((p) => [p.id, count((q) => q.lastName, p) === 1 ? p.lastName : `${prefix(p)} ${p.lastName}`]));
+}

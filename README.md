@@ -51,7 +51,7 @@ docker compose up -d db
 | `/awards` | Awards race: MVP, DPOY, ROY, Sixth Man, Most Improved and Clutch ladders, any season since 1973-74 |
 | `/players/[id]` | Bio and headshot, pace, next career milestones and active streaks (season in progress), Savant percentile rankings, averages/totals/advanced with career row, shot chart, on/off and clutch, most similar seasons in history, game log, transactions |
 | `/team-stats` | Per game and advanced (ratings, four factors) |
-| `/teams`, `/teams/[abbr]` | Every franchise: record, leaders, league percentiles, roster, five-man lineups, schedule, transactions, every season |
+| `/teams`, `/teams/[abbr]` | Every franchise: record, leaders, league percentiles, roster, five-man lineups, assist network (who set up whom), schedule, transactions, every season |
 | `/transactions` | Signings, waivers, trades (grouped), claims, by season, team and type |
 | `/explorer`, `/compare`, `/shots` | Stat explorer with export, players side by side, shot chart analyzer |
 | `/api-docs` | Swagger UI over the public API |

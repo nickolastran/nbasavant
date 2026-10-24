@@ -130,11 +130,23 @@ assert.deepEqual(
   shots[0],
   {
     eventNum: 7, playerId: 1628973, teamId: 1610612752, x: 5, y: 260, distanceFt: 26,
-    made: true, value: 3, zone: 'Above the Break 3', zoneArea: 'Center(C)',
+    made: true, assistId: null, value: 3, zone: 'Above the Break 3', zoneArea: 'Center(C)',
     actionType: 'Jump Shot', period: 1, minsLeft: 11, secsLeft: 45,
   },
   "Brunson's opening three",
 );
+// Who assisted whom: the feed's assistPersonId, absent (or 0) when nobody did.
+{
+  const fg = { isFieldGoal: 1, xLegacy: 0, yLegacy: 40, actionType: '2pt', clock: 'PT05M00.00S', period: 1, teamId: 1, personId: 10 };
+  const [assisted, alone] = shotsFromPbp({
+    actions: [
+      { ...fg, actionNumber: 1, shotResult: 'Made', assistPersonId: 20 },
+      { ...fg, actionNumber: 2, shotResult: 'Made', assistPersonId: 0 },
+    ],
+  });
+  assert.equal(assisted.assistId, 20, 'the passer');
+  assert.equal(alone.assistId, null, 'unassisted is null, not 0');
+}
 // The CDN sometimes sends a field goal with no location (xLegacy: null, as in
 // 0022600097); a null x fails the insert and loses the whole box score.
 assert.equal(
