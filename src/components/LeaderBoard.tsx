@@ -8,8 +8,7 @@ export type Board = {
   /** Printed after the label: "per game", or nothing. */
   note: string;
   empty: string;
-  /** `href` makes the value a link (a game feed row points at its box score). */
-  rows: { playerId: number; name: string; abbr: string; color: string; value: string; href?: string }[];
+  rows: { playerId: number; name: string; abbr: string; color: string; value: string }[];
 };
 
 /** One top-N board: ranked rows of team logo, headshot, name and value, and an optional "Complete list" footer. */
@@ -35,13 +34,7 @@ export function LeaderBoard({ board: b, more }: { board: Board; more?: string })
             <Link href={`/players/${r.playerId}`} className="link flex-1 truncate" style={{ color: 'var(--ink)' }}>
               {r.name}
             </Link>
-            {r.href ? (
-              <Link href={r.href} className="tnum font-semibold no-underline hover:underline" style={{ color: 'var(--ink)' }}>
-                {r.value}
-              </Link>
-            ) : (
-              <span className="tnum font-semibold">{r.value}</span>
-            )}
+            <span className="tnum font-semibold">{r.value}</span>
           </li>
         ))}
         {!b.rows.length && (

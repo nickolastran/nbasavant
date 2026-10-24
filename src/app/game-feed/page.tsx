@@ -54,7 +54,7 @@ export default async function GameFeedPage({ searchParams }: { searchParams: Pro
 
   const games = await prisma.game.findMany({
     where: { date: { gte: new Date(`${date}T00:00:00Z`), lt: new Date(Date.parse(`${date}T00:00:00Z`) + 864e5) } },
-    select: { id: true, status: true },
+    select: { id: true },
   });
   const ids = games.map((g) => g.id);
   const [logs, shots] = await Promise.all([
@@ -71,13 +71,12 @@ export default async function GameFeedPage({ searchParams }: { searchParams: Pro
     }),
   ]);
 
-  const row = (l: { playerId: number; gameId: number; player: { fullName: string }; team: { abbreviation: string; primaryColor: string } }, value: string) => ({
+  const row = (l: { playerId: number; player: { fullName: string }; team: { abbreviation: string; primaryColor: string } }, value: string) => ({
     playerId: l.playerId,
     name: l.player.fullName,
     abbr: l.team.abbreviation,
     color: l.team.primaryColor,
     value,
-    href: `/games/${l.gameId}`,
   });
 
   const empty = 'No finals on this day.';
@@ -104,19 +103,10 @@ export default async function GameFeedPage({ searchParams }: { searchParams: Pro
       .map((s) => row(s, `${s.distanceFt} ft`)),
   });
 
-  const finals = games.filter((g) => g.status.startsWith('Final')).length;
-
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="mb-1 text-xl font-bold tracking-tight">Game Feed</h1>
-          <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
-            The day&apos;s best single-game lines
-            {games.length ? ` from ${finals} of ${games.length} games` : ''}. Games join once they go final. Open a value for
-            its box score.
-          </p>
-        </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold tracking-tight">Game Feed</h1>
         <FeedDate date={date} />
       </div>
 
