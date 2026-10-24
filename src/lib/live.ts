@@ -49,6 +49,22 @@ function withClock(g: any) {
   return `${status} ${min}:${String(sec).padStart(2, '0')}`;
 }
 
+/**
+ * A game's own box score laid over its scoreboard entry. The scoreboard file
+ * sometimes freezes one game (a "Halftime" at 38-39 while the box score is
+ * at 6:28 of the second quarter); the box score keeps moving, so it wins.
+ */
+export function fromBox(g: LiveGame, box: any): LiveGame {
+  return {
+    ...g,
+    state: STATE[box.gameStatus] ?? g.state,
+    status: withClock(box),
+    period: box.period ?? g.period,
+    home: { ...g.home, score: box.homeTeam.score ?? g.home.score, periods: lineOf(box.homeTeam) },
+    away: { ...g.away, score: box.awayTeam.score ?? g.away.score, periods: lineOf(box.awayTeam) },
+  };
+}
+
 /** Today's slate by the NBA's own calendar, or null when the feed can't be reached. */
 export async function liveScoreboard(): Promise<{ date: string; games: LiveGame[] } | null> {
   let board: any;
@@ -58,7 +74,7 @@ export async function liveScoreboard(): Promise<{ date: string; games: LiveGame[
     console.error('live scoreboard unavailable:', e instanceof Error ? e.message : e);
     return null;
   }
-  const games: LiveGame[] = (board.games as any[]).map((g) => ({
+  const listed: LiveGame[] = (board.games as any[]).map((g) => ({
     gameCode: g.gameId,
     state: STATE[g.gameStatus] ?? 'pre',
     status: withClock(g),
@@ -67,6 +83,15 @@ export async function liveScoreboard(): Promise<{ date: string; games: LiveGame[
     home: side(g.homeTeam, g.gameLeaders?.homeLeaders),
     away: side(g.awayTeam, g.gameLeaders?.awayLeaders),
   }));
+  // Anything past tip-off and not final checks its box score (cached 10 s, the
+  // same entry the game page reads). No box yet means not started: keep the listing.
+  const games = await Promise.all(
+    listed.map((g) =>
+      g.state === 'final' || Date.parse(g.start) > Date.now()
+        ? g
+        : nbaJson(FEEDS.box(g.gameCode), 10).then((r) => fromBox(g, r.game), () => g),
+    ),
+  );
 
   // Write-through: save finals the database hasn't recorded yet. Several
   // visitors can trigger the same one; syncGame is idempotent, so that's fine.

@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { legacyId, matcher, normName, resolvePlayer } from './identity';
 import { benchReason, clockParts, clockSeconds, gameKind, inches, isClutch, lineOf, logsFromBox, minutesPlayed, playsFromPbp, shotsFromPbp, stintsFromPbp, topOf } from './nba';
+import { fromBox } from './live';
 import { alignment, cupFinal, nn, pctOf, seasonLine, seasonPath, teamIdFor } from './bref';
 import { localTip, shiftDay, tipAt, todayEt } from './dates';
 import { displayName, rowsFromWords, type Word } from './injuries';
@@ -147,6 +148,22 @@ assert.deepEqual(
   assert.equal(assisted.assistId, 20, 'the passer');
   assert.equal(alone.assistId, null, 'unassisted is null, not 0');
 }
+// A frozen scoreboard entry gives way to the game's own box score.
+{
+  const frozen = {
+    gameCode: '0022600104', state: 'live' as const, status: 'Halftime', start: '2026-10-24T22:00:00Z', period: 2,
+    home: { abbr: 'CHA', score: 39, record: '1-1', periods: [20, 19, 0, 0], leader: null },
+    away: { abbr: 'MIA', score: 38, record: '0-2', periods: [18, 20, 0, 0], leader: null },
+  };
+  const team = (score: number, q: number[]) => ({ score, periods: q.map((score, i) => ({ period: i + 1, score })) });
+  const now = fromBox(frozen, {
+    gameStatus: 2, gameStatusText: 'Q2 6:28', period: 2, gameClock: 'PT06M28.00S',
+    homeTeam: team(47, [20, 27, 0, 0]), awayTeam: team(45, [18, 27, 0, 0]),
+  });
+  assert.deepEqual([now.status, now.away.score, now.home.score, now.home.periods], ['Q2 6:28', 45, 47, [20, 27, 0, 0]], 'box score wins');
+  assert.equal(now.home.record, '1-1', 'records stay from the scoreboard');
+}
+
 // The CDN sometimes sends a field goal with no location (xLegacy: null, as in
 // 0022600097); a null x fails the insert and loses the whole box score.
 assert.equal(
