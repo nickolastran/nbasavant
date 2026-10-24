@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 /** The always-visible section row. Order matches the printed box score's. */
 const TABS = [
   { href: '/scores', label: 'Scores' },
+  { href: '/game-feed', label: 'Game Feed' },
   { href: '/schedule', label: 'Schedule' },
   { href: '/standings', label: 'Standings' },
   { href: '/leaders', label: 'Stat Leaders' },

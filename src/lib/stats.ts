@@ -40,6 +40,14 @@ export const tsPct = (b: Pick<BoxTotals, 'pts' | 'fga' | 'fta'>) =>
 export const efgPct = (b: Pick<BoxTotals, 'fgm' | 'fg3m' | 'fga'>) =>
   div(b.fgm + 0.5 * b.fg3m, b.fga) * 100;
 
+/**
+ * Hollinger's Game Score: one game's box line as a single number on the points
+ * scale (about 10 is an average game, 40 an outstanding one).
+ */
+export const gameScore = (b: BoxTotals) =>
+  b.pts + 0.4 * b.fgm - 0.7 * b.fga - 0.4 * (b.fta - b.ftm) + 0.7 * b.oreb + 0.3 * b.dreb +
+  b.stl + 0.7 * b.ast + 0.7 * b.blk - 0.4 * b.pf - b.tov;
+
 // --- Rate stats -----------------------------------------------------------
 
 /** Share of team possessions a player used while on the floor. */

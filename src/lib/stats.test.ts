@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
-  gameClock, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
+  gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
   careerAdvanced, careerTotals, minGames, percentileOf, pythagWins, scaledFloor, standings,
 } from './stats';
 import { ordinal } from './format';
@@ -21,6 +21,7 @@ near(tsPct(box({ pts: 30, fga: 20, fta: 10 })), 61.475, 0.01, 'TS%');
 near(efgPct(box({ fgm: 10, fg3m: 4, fga: 20 })), 60, 0.01, 'eFG%');
 near(tovPct(box({ tov: 5, fga: 20, fta: 10 })), 17.007, 0.01, 'TOV%');
 assert.equal(tsPct(box({})), 0, 'no attempts must not divide by zero');
+near(gameScore(box({ pts: 30, fgm: 11, fga: 20, ftm: 6, fta: 8, oreb: 2, dreb: 6, stl: 2, ast: 5, blk: 1, pf: 3, tov: 3 })), 24.8, 0.001, 'Game Score');
 
 // --- Rate stats -----------------------------------------------------------
 // A player who takes every team shot while playing every team minute uses 100%.
