@@ -19,6 +19,9 @@ const TEAM_CATS: { key: Stat; label: string }[] = [
   { key: 'per', label: 'PER' },
 ];
 
+/** "Nickeil Alexander-Walker" -> "N. Alexander-Walker", so seven columns of names fit across the page. */
+const short = (name: string) => name.replace(/^(\S)\S*\s+(?=\S)/, '$1.\u00a0');
+
 const VIEWS = [
   { value: 'players', label: 'Players' },
   { value: 'teams', label: 'Team Leaders' },
@@ -113,10 +116,11 @@ export default async function LeadersPage({
         </div>
       ) : (
         <div className="panel overflow-x-auto">
-          <table className="stat-table">
+          {/* Fixed columns that fit the page; a name too long for its column ends in an ellipsis. Phones still scroll. */}
+          <table className="stat-table min-w-[56rem] table-fixed">
             <thead>
               <tr>
-                <th style={{ cursor: 'default' }}>Team</th>
+                <th style={{ cursor: 'default', width: '11rem' }}>Team</th>
                 {TEAM_CATS.map((c) => (
                   <th key={c.key} style={{ cursor: 'default', textAlign: 'left' }}>
                     {c.label}
@@ -130,7 +134,7 @@ export default async function LeadersPage({
                   <td>
                     <span className="flex items-center gap-2">
                       <TeamMark abbr={t.team.abbreviation} color={t.team.primaryColor} size={18} />
-                      <Link href={`/teams/${t.team.abbreviation}?season=${season?.key}`} className="link font-medium">
+                      <Link href={`/teams/${t.team.abbreviation}?season=${season?.key}`} className="link min-w-0 truncate font-medium">
                         {t.name ?? `${t.team.city} ${t.team.name}`}
                       </Link>
                     </span>
@@ -138,12 +142,12 @@ export default async function LeadersPage({
                   {leaders.map((l, i) => (
                     <td key={TEAM_CATS[i].key} style={{ textAlign: 'left' }}>
                       {l ? (
-                        <>
-                          <Link href={`/players/${l.playerId}`} className="link">
-                            {l.name}
-                          </Link>{' '}
-                          <span className="tnum font-semibold">{fmt(l[TEAM_CATS[i].key])}</span>
-                        </>
+                        <span className="flex items-baseline gap-1.5">
+                          <Link href={`/players/${l.playerId}`} title={l.name} className="link min-w-0 flex-1 truncate">
+                            {short(l.name)}
+                          </Link>
+                          <span className="tnum shrink-0 font-semibold">{fmt(l[TEAM_CATS[i].key])}</span>
+                        </span>
                       ) : (
                         <span style={{ color: 'var(--ink-3)' }}>—</span>
                       )}
