@@ -572,6 +572,24 @@ export function nearestSeasons(rows: SeasonVector[], target: SeasonVector, n: nu
   return out.sort((a, b) => a.distance - b.distance).slice(0, n);
 }
 
+// --- Pace, milestones and streaks ---------------------------------------------
+
+/** A season total carried over the schedule at its rate per team game, so games he misses count against him. */
+export const onPace = (total: number, teamGames: number, seasonGames = 82) =>
+  teamGames ? Math.round((total / teamGames) * seasonGames) : null;
+
+/** The next round number above a career total, and how far off it is. */
+export function nextMilestone(total: number, step: number) {
+  const at = (Math.floor(total / step) + 1) * step;
+  return { at, left: at - total };
+}
+
+/** How many of his latest games in a row pass `test`. `games` newest first. */
+export function activeStreak<T>(games: T[], test: (g: T) => boolean) {
+  const i = games.findIndex((g) => !test(g));
+  return i === -1 ? games.length : i;
+}
+
 // --- Qualifying and ranking ---------------------------------------------------
 
 /**

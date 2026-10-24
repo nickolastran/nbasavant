@@ -49,7 +49,7 @@ docker compose up -d db
 | `/leaders` | Sixteen leaderboards (per game, shooting, PER/BPM/WS/VORP) and a Team Leaders view |
 | `/players` | Per game / totals / advanced for every player-season |
 | `/awards` | Awards race: MVP, DPOY, ROY, Sixth Man, Most Improved and Clutch ladders, any season since 1973-74 |
-| `/players/[id]` | Bio and headshot, Savant percentile rankings, averages/totals/advanced with career row, shot chart, on/off and clutch, most similar seasons in history, game log, transactions |
+| `/players/[id]` | Bio and headshot, pace, next career milestones and active streaks (season in progress), Savant percentile rankings, averages/totals/advanced with career row, shot chart, on/off and clutch, most similar seasons in history, game log, transactions |
 | `/team-stats` | Per game and advanced (ratings, four factors) |
 | `/teams`, `/teams/[abbr]` | Every franchise: record, leaders, league percentiles, roster, five-man lineups, schedule, transactions, every season |
 | `/transactions` | Signings, waivers, trades (grouped), claims, by season, team and type |

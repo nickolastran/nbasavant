@@ -5,6 +5,7 @@ import {
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
   careerAdvanced, careerTotals, expectedShooting, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
+  activeStreak, nextMilestone, onPace,
 } from './stats';
 import { ordinal } from './format';
 
@@ -156,6 +157,16 @@ const near1 = nearestSeasons(zs, zs[0], 3, 1);
 assert.deepEqual(near1.map((m) => m.row.playerId), [3, 2, 4], 'nearest first, his own seasons skipped');
 near(near1[0].distance, 0.2247, 0.001, 'distance over the stats both have');
 assert.equal(nearestSeasons(zs, zs[0], 3, 2).length, 0, 'too few shared stats, no match');
+
+// --- Pace, milestones and streaks -------------------------------------------
+// 300 points through 10 team games is 30 a game, 2,460 over 82.
+assert.equal(onPace(300, 10), 2460, 'pace per team game');
+assert.equal(onPace(0, 0), null, 'no games, no pace');
+assert.deepEqual(nextMilestone(29888, 1000), { at: 30000, left: 112 }, '112 from 30,000');
+assert.deepEqual(nextMilestone(30000, 1000), { at: 31000, left: 1000 }, 'reached one, on to the next');
+assert.equal(activeStreak([25, 31, 20, 12, 40], (p) => p >= 20), 3, 'newest three at 20+');
+assert.equal(activeStreak([12, 30], (p) => p >= 20), 0, 'broken last game');
+assert.equal(activeStreak([22, 30], (p) => p >= 20), 2, 'every game so far');
 
 // --- Lineup stints ---------------------------------------------------------
 // 12 minutes, 30-24 on 25 and 23 possessions (24 averaged): 125 / 100 per 100.

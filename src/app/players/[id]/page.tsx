@@ -12,7 +12,10 @@ import { ViewTabs } from '@/components/ViewTabs';
 import { feetInches, fmt, ordinal, perGame } from '@/lib/format';
 import { seasonShooting } from '@/lib/leaders';
 import { FEATURES, MIN_MINUTES, similarSeasons } from '@/lib/similar';
-import { careerAdvanced, careerTotals, expectedShooting, minGames, percentileOf, scaledFloor, stintRatings, type SeasonLine } from '@/lib/stats';
+import {
+  activeStreak, careerAdvanced, careerTotals, expectedShooting, minGames, nextMilestone, onPace, percentileOf, scaledFloor, stintRatings,
+  type SeasonLine,
+} from '@/lib/stats';
 
 export const revalidate = 60;
 
@@ -269,6 +272,36 @@ export default async function PlayerPage({
       return `${label} from ${first?.season.key}`;
     });
 
+  // --- Pace, milestones and active streaks (his season in progress) -----------
+  const soFar = line ? Math.max(line.gp, gpOf.get(line.teamId ?? -1) ?? teamGames) : 0;
+  const inProgress = player.active && !!line && season === seasons.at(-1) && soFar > 0 && soFar < 82;
+  const TRACKED = [
+    { key: 'pts', label: 'points', step: 1000 }, { key: 'reb', label: 'rebounds', step: 500 },
+    { key: 'ast', label: 'assists', step: 500 }, { key: 'stl', label: 'steals', step: 100 },
+    { key: 'blk', label: 'blocks', step: 100 }, { key: 'fg3m', label: 'threes', step: 100 },
+  ] as const;
+  const tracker = inProgress
+    ? TRACKED.flatMap((t) => {
+        const now = line![t.key], total = c[t.key].total;
+        if (now === null || total === null) return [];
+        const m = nextMilestone(total, t.step);
+        const rate = now / line!.gp;
+        return [{ ...t, now, pace: onPace(now, soFar)!, ...m, games: rate ? Math.ceil(m.left / rate) : null }];
+      })
+    : [];
+  const doubles = (l: (typeof logs)[number]) => [l.pts, l.reb, l.ast, l.stl, l.blk].filter((v) => v >= 10).length;
+  const streaks = inProgress
+    ? ([
+        ['30+ points', (l) => l.pts >= 30], ['20+ points', (l) => l.pts >= 20], ['Double-digit points', (l) => l.pts >= 10],
+        ['10+ rebounds', (l) => l.reb >= 10], ['10+ assists', (l) => l.ast >= 10], ['Double-doubles', (l) => doubles(l) >= 2],
+        ['3+ threes', (l) => l.fg3m >= 3], ['Made a three', (l) => l.fg3m >= 1],
+      ] as [string, (l: (typeof logs)[number]) => boolean][])
+        .map(([label, test]) => ({ label, n: activeStreak(logs, test) }))
+        .filter((s) => s.n >= 3)
+        .sort((a, b) => b.n - a.n)
+    : [];
+  const num = (v: number) => v.toLocaleString('en-US');
+
   const logRows = logs.map((l) => {
     const home = l.teamId === l.game.homeTeamId;
     const opp = home ? l.game.awayTeam.abbreviation : l.game.homeTeam.abbreviation;
@@ -371,6 +404,61 @@ export default async function PlayerPage({
             }]}
           />
         </Suspense>
+      )}
+
+      {tracker.length > 0 && (
+        <section className="grid gap-5 lg:grid-cols-3">
+          <div>
+            <h2 className="mb-2 text-sm font-semibold">On pace for, {season!.key}</h2>
+            <dl className="panel flex flex-wrap gap-x-6 gap-y-3 p-4">
+              {tracker.map((t) => (
+                <div key={t.key} title={`${num(t.now)} ${t.label} through ${soFar} team games, carried over 82`}>
+                  <dt className="eyebrow">{t.label}</dt>
+                  <dd className="tnum text-lg font-bold">{num(t.pace)}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-2 text-xs" style={{ color: 'var(--ink-3)' }}>
+              His totals per team game so far, over 82 games. Games he misses count against him.
+            </p>
+          </div>
+          <div>
+            <h2 className="mb-2 text-sm font-semibold">Next career milestones</h2>
+            <ul className="panel divide-y text-sm" style={{ borderColor: 'var(--line)' }}>
+              {[...tracker].sort((a, b) => (a.games ?? Infinity) - (b.games ?? Infinity)).map((t) => (
+                <li key={t.key} className="flex justify-between gap-3 px-3 py-2" style={{ borderColor: 'var(--line)' }}>
+                  <span>
+                    <span className="tnum font-bold">{num(t.left)}</span> away from {num(t.at)} {t.label}
+                  </span>
+                  {t.games !== null && (
+                    <span className="tnum text-xs" style={{ color: 'var(--ink-3)' }}>~{t.games} games</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs" style={{ color: 'var(--ink-3)' }}>
+              Regular season. Games to go at his {season!.key} rate.
+            </p>
+          </div>
+          <div>
+            <h2 className="mb-2 text-sm font-semibold">Active streaks</h2>
+            {streaks.length ? (
+              <ul className="panel divide-y text-sm" style={{ borderColor: 'var(--line)' }}>
+                {streaks.map((s) => (
+                  <li key={s.label} className="flex justify-between gap-3 px-3 py-2" style={{ borderColor: 'var(--line)' }}>
+                    <span>{s.label}</span>
+                    <span className="tnum font-bold">{s.n} straight</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="panel p-4 text-sm" style={{ color: 'var(--ink-3)' }}>No streak of three games or more going.</p>
+            )}
+            <p className="mt-2 text-xs" style={{ color: 'var(--ink-3)' }}>
+              Games he played this season, latest first. A game he sits out doesn&apos;t break one.
+            </p>
+          </div>
+        </section>
       )}
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
