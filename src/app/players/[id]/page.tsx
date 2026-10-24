@@ -92,13 +92,13 @@ export default async function PlayerPage({
   const line = player.stats.find((s) => s.seasonId === season?.id);
   const lineAdv = season ? adv.get(season.id) : undefined;
 
-  const [field, teamGames, shots, logs, moves] = await Promise.all([
+  const [field, teamGp, shots, logs, moves] = await Promise.all([
     season
       ? prisma.playerStats.findMany({ where: { seasonId: season.id }, include: { player: { select: { advancedStats: { where: { seasonId: season.id } } } } } })
       : [],
     season
-      ? prisma.teamStats.aggregate({ where: { seasonId: season.id }, _max: { gp: true } }).then((r) => r._max.gp ?? 0)
-      : 0,
+      ? prisma.teamStats.findMany({ where: { seasonId: season.id }, select: { teamId: true, gp: true } })
+      : [],
     season
       ? prisma.shotData.findMany({
           where: { playerId: id, seasonId: season.id },
@@ -122,8 +122,12 @@ export default async function PlayerPage({
   ]);
 
   // --- Percentile rankings against the qualified field -----------------------
-  const qualifyAt = minGames(teamGames);
-  const qualified = field.filter((f) => f.gp >= qualifyAt);
+  // Each player qualifies on his own team's games (as /leaders does): early on,
+  // one team a game ahead mustn't shrink the field to its own roster.
+  const gpOf = new Map(teamGp.map((t) => [t.teamId, t.gp]));
+  const teamGames = Math.max(0, ...teamGp.map((t) => t.gp));
+  const gamesOf = (f: { teamId: number | null }) => gpOf.get(f.teamId ?? -1) ?? teamGames;
+  const qualified = field.filter((f) => f.gp >= minGames(gamesOf(f)));
   type Metric = { label: string; unit?: string; dp?: number; low?: boolean; get: (f: (typeof field)[number]) => Cell; floor?: (f: (typeof field)[number]) => boolean };
   const a = (f: (typeof field)[number]) => f.player.advancedStats[0];
   const METRICS: Metric[] = [
@@ -133,9 +137,9 @@ export default async function PlayerPage({
     { label: 'Steals', get: (f) => perGame(f.stl, f.gp) },
     { label: 'Blocks', get: (f) => perGame(f.blk, f.gp) },
     { label: 'Turnovers', low: true, get: (f) => perGame(f.tov, f.gp) },
-    { label: 'True shooting', unit: '%', get: (f) => f.tsPct, floor: (f) => f.fga >= scaledFloor(300, teamGames) },
-    { label: 'Three-point %', unit: '%', get: (f) => f.fg3Pct, floor: (f) => (f.fg3a ?? 0) >= scaledFloor(100, teamGames) },
-    { label: 'Free throw %', unit: '%', get: (f) => f.ftPct, floor: (f) => f.fta >= scaledFloor(100, teamGames) },
+    { label: 'True shooting', unit: '%', get: (f) => f.tsPct, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)) },
+    { label: 'Three-point %', unit: '%', get: (f) => f.fg3Pct, floor: (f) => (f.fg3a ?? 0) >= scaledFloor(100, gamesOf(f)) },
+    { label: 'Free throw %', unit: '%', get: (f) => f.ftPct, floor: (f) => f.fta >= scaledFloor(100, gamesOf(f)) },
     { label: 'Usage', unit: '%', get: (f) => f.usgPct },
     { label: 'Assist %', unit: '%', get: (f) => a(f)?.astPct ?? null },
     { label: 'Rebound %', unit: '%', get: (f) => a(f)?.rebPct ?? null },
@@ -145,6 +149,7 @@ export default async function PlayerPage({
     { label: 'VORP', get: (f) => a(f)?.vorp ?? null },
   ];
   const me = field.find((f) => f.playerId === id);
+  const qualifyAt = me ? minGames(gamesOf(me)) : 0;
   const ranks: Percentile[] = [];
   if (me && me.gp >= qualifyAt) {
     for (const m of METRICS) {
@@ -306,7 +311,7 @@ export default async function PlayerPage({
       <section className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <PercentileBars
           title={`Percentile rankings, ${season?.key ?? ''}`}
-          subtitle={`Against the ${qualified.length} players with ${qualifyAt}+ games. Red beats the field, blue trails it.`}
+          subtitle={`Against the ${qualified.length} players with 70% of their team's games. Red beats the field, blue trails it.`}
           rows={ranks}
           empty={
             !line
