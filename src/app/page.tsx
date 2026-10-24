@@ -189,35 +189,6 @@ async function HomeContent() {
             </>
           )}
 
-          {onThisDate.length > 0 && (
-            <>
-              <p className="eyebrow mt-6">
-                On this date ·{' '}
-                {new Date(`${today}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
-              </p>
-              <ol className="panel mt-2 divide-y" style={{ borderColor: 'var(--line)' }}>
-                {onThisDate.map((g) => {
-                  const top = [g.leaders?.away, g.leaders?.home].filter((l) => l).sort((a, b) => b!.pts - a!.pts)[0];
-                  return (
-                    <li key={g.id}>
-                      <Link href={`/games/${g.id}`} className="flex items-center gap-2 px-3 py-2 text-sm no-underline hover:bg-[var(--panel-2)]" style={{ color: 'var(--ink)' }}>
-                        <span className="eyebrow tnum w-10">{g.date.getUTCFullYear()}</span>
-                        <TeamMark abbr={g.away.abbreviation} color={g.away.primaryColor} size={18} />
-                        <span className="tnum">
-                          {g.away.abbreviation} {g.awayScore} @ {g.home.abbreviation} {g.homeScore}
-                        </span>
-                        <TeamMark abbr={g.home.abbreviation} color={g.home.primaryColor} size={18} />
-                        <span className="min-w-0 flex-1 truncate text-right text-xs" style={{ color: 'var(--ink-2)' }}>
-                          {top && `${top.name} ${top.pts}`}
-                        </span>
-                        {g.status !== 'Final' && <span className="eyebrow">{g.status.replace('Final/', '')}</span>}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ol>
-            </>
-          )}
         </div>
 
         <LeaderRail heading={`${season.key} leaders`} boards={rail(STANDARD)} className="xl:order-1" />
@@ -279,6 +250,34 @@ async function HomeContent() {
               ))}
             </ul>
           </Panel>
+
+          {onThisDate.length > 0 && (
+            <Panel
+              title={`On this date · ${new Date(`${today}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`}
+            >
+              <ul className="divide-y" style={{ borderColor: 'var(--line)' }}>
+                {onThisDate.map((g) => {
+                  const top = [g.leaders?.away, g.leaders?.home].filter((l) => l).sort((a, b) => b!.pts - a!.pts)[0];
+                  return (
+                    <li key={g.id}>
+                      <Link href={`/games/${g.id}`} className="flex items-center gap-2 py-2 text-sm no-underline" style={{ color: 'var(--ink)' }}>
+                        <span className="eyebrow tnum w-10">{g.date.getUTCFullYear()}</span>
+                        <TeamMark abbr={g.away.abbreviation} color={g.away.primaryColor} size={18} />
+                        <span className="tnum">
+                          {g.away.abbreviation} {g.awayScore} @ {g.home.abbreviation} {g.homeScore}
+                        </span>
+                        <TeamMark abbr={g.home.abbreviation} color={g.home.primaryColor} size={18} />
+                        <span className="min-w-0 flex-1 truncate text-right text-xs" style={{ color: 'var(--ink-2)' }}>
+                          {top && `${top.name} ${top.pts}`}
+                        </span>
+                        {g.status !== 'Final' && <span className="eyebrow">{g.status.replace('Final/', '')}</span>}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Panel>
+          )}
         </div>
       </section>
 
