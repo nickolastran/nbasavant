@@ -4,7 +4,7 @@ import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
-  careerAdvanced, careerTotals, expectedShooting, stintRatings, minGames, percentileOf, pythagWins, scaledFloor, standings,
+  careerAdvanced, careerTotals, expectedShooting, stintRatings, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
 } from './stats';
 import { ordinal } from './format';
 
@@ -126,6 +126,18 @@ assert.equal(shotZone(0, 150).zone, 'Mid-Range', 'mid-range');
 assert.equal(shotZone(230, 200).value, 3, 'deep wing is a three');
 // A shot 22ft out but above the break is still a two.
 assert.equal(shotZone(0, 220).value, 2, 'inside the arc above the break');
+
+// --- Awards ladders ---------------------------------------------------------
+// a: 10 and 1, b: 20 and 1, c: 30 and 4. Means 20 and 2, SDs 8.165 and 1.414.
+// c: (1.225 + 1.414) / 2 = 1.319; a: (-1.225 - 0.707) / 2 = -0.966.
+const ladder = zLadder(
+  [{ id: 'a', x: 10, y: 1 }, { id: 'b', x: 20, y: 1 }, { id: 'c', x: 30, y: 4 }, { id: 'd', x: 40, y: null }],
+  [(r) => r.x, (r) => r.y],
+);
+assert.deepEqual(ladder.map((l) => l.row.id), ['c', 'b', 'a'], 'ranked by average z, the row missing a stat left off');
+near(ladder[0].score, 1.3195, 0.001, 'top score');
+near(ladder[2].score, -0.9659, 0.001, 'bottom score');
+assert.equal(zLadder([{ x: 5 }, { x: 5 }], [(r) => r.x])[0].score, 0, 'no spread, no z');
 
 // --- Lineup stints ---------------------------------------------------------
 // 12 minutes, 30-24 on 25 and 23 possessions (24 averaged): 125 / 100 per 100.

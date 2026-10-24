@@ -22,7 +22,7 @@ const CUBE = [
   { href: '/draft', label: 'Draft', hint: 'Classes and career output' },
   { href: '/injuries', label: 'Injuries', hint: 'Report and status' },
   { href: '/depth-charts', label: 'Depth Charts', hint: 'Rotations by position' },
-  { href: '/awards', label: 'Awards', hint: 'MVP, DPOY, All-NBA' },
+  { href: '/awards', label: 'Awards', hint: 'MVP, DPOY, ROY race' },
   { href: '/salaries', label: 'Salaries', hint: 'Cap sheets and deals' },
   { href: '/compare', label: 'Compare', hint: 'Players side by side' },
   { href: '/shots', label: 'Shot Charts', hint: 'Every attempt, mapped' },

@@ -7,14 +7,15 @@ import { perGame } from './format';
 import { minGames, scaledFloor } from './stats';
 
 export type Line = {
-  playerId: number; name: string; abbr: string; color: string; teamId: number | null; gp: number;
+  playerId: number; name: string; abbr: string; color: string; teamId: number | null; gp: number; gs: number | null;
   min: number | null; fga: number; fg3a: number | null; fta: number;
   ppg: number | null; rpg: number | null; apg: number | null; spg: number | null; bpg: number | null;
   tpm: number | null; fgPct: number | null; fg3Pct: number | null; ftPct: number | null;
   tsPct: number | null; efgPct: number | null; usgPct: number | null;
   per: number | null; ws: number | null; bpm: number | null; vorp: number | null;
+  dws: number | null; dbpm: number | null;
 };
-export type Stat = Exclude<keyof Line, 'playerId' | 'name' | 'abbr' | 'color' | 'teamId' | 'gp' | 'min' | 'fga' | 'fg3a' | 'fta'>;
+export type Stat = Exclude<keyof Line, 'playerId' | 'name' | 'abbr' | 'color' | 'teamId' | 'gp' | 'gs' | 'min' | 'fga' | 'fg3a' | 'fta' | 'dws' | 'dbpm'>;
 
 /**
  * Each board, and what it takes to be on it. Per-game and rate boards need
@@ -65,13 +66,14 @@ export async function leaderBoards(seasonId: number | undefined, n = 10, minGpOv
   const lines: Line[] = stats.map((s) => {
     const a = s.player.advancedStats[0];
     return {
-      playerId: s.playerId, name: s.player.fullName, teamId: s.teamId, gp: s.gp,
+      playerId: s.playerId, name: s.player.fullName, teamId: s.teamId, gp: s.gp, gs: s.gs,
       abbr: s.team?.abbreviation ?? '', color: s.team?.primaryColor ?? 'var(--mid)',
       min: s.min, fga: s.fga, fg3a: s.fg3a, fta: s.fta,
       ppg: s.ppg, rpg: s.rpg, apg: s.apg,
       spg: perGame(s.stl, s.gp), bpg: perGame(s.blk, s.gp), tpm: perGame(s.fg3m, s.gp),
       fgPct: s.fgPct, fg3Pct: s.fg3Pct, ftPct: s.ftPct, tsPct: s.tsPct, efgPct: s.efgPct, usgPct: s.usgPct,
       per: a?.per ?? null, ws: a?.ws ?? null, bpm: a?.bpm ?? null, vorp: a?.vorp ?? null,
+      dws: a?.dws ?? null, dbpm: a?.dbpm ?? null,
     };
   });
 
@@ -93,5 +95,5 @@ export async function leaderBoards(seasonId: number | undefined, n = 10, minGpOv
       b.key,
     ).slice(0, n),
   }));
-  return { lines, teamStats, teamGames, minGp, boards };
+  return { lines, teamStats, teamGames, minGp, games, boards };
 }

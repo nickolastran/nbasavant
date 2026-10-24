@@ -525,6 +525,24 @@ export function careerAdvanced(lines: AdvancedLine[]) {
 
 // --- Qualifying and ranking ---------------------------------------------------
 
+/**
+ * Rank rows by their average z-score across some stats, every stat weighted
+ * the same, against the rows given: the whole model behind the awards ladders,
+ * so a reader can check it. A row missing any of the stats is left off.
+ */
+export function zLadder<T>(rows: T[], stats: ((r: T) => number | null)[]) {
+  const full = rows.filter((r) => stats.every((s) => s(r) !== null));
+  const z = stats.map((s) => {
+    const v = full.map((r) => s(r)!);
+    const mean = v.reduce((a, x) => a + x, 0) / (v.length || 1);
+    const sd = Math.sqrt(v.reduce((a, x) => a + (x - mean) ** 2, 0) / (v.length || 1));
+    return (r: T) => (sd ? (s(r)! - mean) / sd : 0);
+  });
+  return full
+    .map((row) => ({ row, score: z.reduce((a, f) => a + f(row), 0) / z.length }))
+    .sort((a, b) => b.score - a.score);
+}
+
 /** The NBA's leaderboard rule: 70% of team games, rounded up. Integer math on purpose. */
 export const minGames = (teamGames: number) => Math.ceil((teamGames * 7) / 10);
 
