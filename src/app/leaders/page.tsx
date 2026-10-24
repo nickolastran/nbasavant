@@ -40,7 +40,7 @@ export default async function LeadersPage({
   const season = seasons.find((s) => s.key === sp.season) ?? active;
   const view = sp.view === 'teams' ? 'teams' : 'players';
 
-  const { lines, teamStats, teamGames, minGp, boards } = await leaderBoards(season?.id, 10, Number(sp.minGp));
+  const { lines, teamStats, teamGames, minGp, boards } = await leaderBoards(season?.id, 10, Number(sp.minGp), true);
 
   // Each team's best qualified player per category; if nobody on a team
   // qualifies yet, its best player regardless.
@@ -58,8 +58,8 @@ export default async function LeadersPage({
       <h1 className="mb-1 text-xl font-bold tracking-tight">Stat Leaders</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
         {season?.key}. To qualify: {sp.minGp ? `${minGp} games` : teamGames ? "70% of the team's games so far" : 'no games yet'}; rate
-        boards also need their attempts, and usage, PER and BPM their minutes, prorated to games played. Win shares and VORP are season totals and rank
-        everyone.
+        boards also need their attempts, and usage, PER and BPM their minutes, prorated to games played. Win shares, VORP and the clutch boards are season
+        totals and rank everyone. Shot-making, on/off and the clutch come from the play-by-play, 2026-27 on.
       </p>
 
       <Suspense>
@@ -102,7 +102,7 @@ export default async function LeadersPage({
                       {r.name}
                     </Link>
                     <span className="eyebrow">{r.abbr}</span>
-                    <span className="tnum w-12 text-right font-semibold">{fmt(r[b.key], 1, b.unit)}</span>
+                    <span className="tnum w-12 text-right font-semibold">{fmt(r[b.key], b.dp ?? 1, b.unit)}</span>
                   </li>
                 ))}
                 {!b.rows.length && (

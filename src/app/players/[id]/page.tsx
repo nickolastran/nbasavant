@@ -10,6 +10,7 @@ import { StatTable, type Col } from '@/components/StatTable';
 import { TrendChart } from '@/components/TrendChart';
 import { ViewTabs } from '@/components/ViewTabs';
 import { feetInches, fmt, ordinal, perGame } from '@/lib/format';
+import { seasonShooting } from '@/lib/leaders';
 import { careerAdvanced, careerTotals, expectedShooting, minGames, percentileOf, scaledFloor, stintRatings, type SeasonLine } from '@/lib/stats';
 
 export const revalidate = 60;
@@ -123,15 +124,7 @@ export default async function PlayerPage({
 
   // Expected shooting needs the whole league's real shots, so only seasons that have them.
   const realShots = shots.some((s) => s.eventNum !== null);
-  const xShot = realShots
-    ? expectedShooting(
-        (await prisma.shotData.groupBy({
-          by: ['playerId', 'value', 'distanceFt', 'made'],
-          where: { seasonId: season!.id, eventNum: { not: null } },
-          _count: true,
-        })).map((g) => ({ ...g, n: g._count })),
-      )
-    : expectedShooting([]);
+  const xShot = realShots ? await seasonShooting(season!.id) : expectedShooting([]);
 
   // --- On/off and the clutch, from his teams' lineup stints (2026-27 on) ------
   const teamIds = [...new Set(logs.map((l) => l.teamId))];

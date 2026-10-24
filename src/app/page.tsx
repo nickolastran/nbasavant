@@ -102,7 +102,7 @@ async function HomeContent() {
         label: b.label,
         note: isPerGame(b) ? 'per game' : '',
         empty: b.tracked ? 'No qualifiers yet.' : `Not tracked in ${season.key}.`,
-        rows: b.rows.map((r) => ({ playerId: r.playerId, name: r.name, abbr: r.abbr, color: r.color, value: fmt(r[b.key], 1, b.unit) })),
+        rows: b.rows.map((r) => ({ playerId: r.playerId, name: r.name, abbr: r.abbr, color: r.color, value: fmt(r[b.key], b.dp ?? 1, b.unit) })),
       }));
 
   return (
