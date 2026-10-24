@@ -49,7 +49,7 @@ docker compose up -d db
 | `/leaders` | Sixteen leaderboards (per game, shooting, PER/BPM/WS/VORP) and a Team Leaders view |
 | `/players` | Per game / totals / advanced for every player-season |
 | `/awards` | Awards race: MVP, DPOY, ROY, Sixth Man, Most Improved and Clutch ladders, any season since 1973-74 |
-| `/players/[id]` | Bio and headshot, Savant percentile rankings, averages/totals/advanced with career row, shot chart, on/off and clutch, game log, transactions |
+| `/players/[id]` | Bio and headshot, Savant percentile rankings, averages/totals/advanced with career row, shot chart, on/off and clutch, most similar seasons in history, game log, transactions |
 | `/team-stats` | Per game and advanced (ratings, four factors) |
 | `/teams`, `/teams/[abbr]` | Every franchise: record, leaders, league percentiles, roster, five-man lineups, schedule, transactions, every season |
 | `/transactions` | Signings, waivers, trades (grouped), claims, by season, team and type |
@@ -155,6 +155,10 @@ lines that straddle 1973-74.
   possessions, pace, team ORtg/DRtg, PER, Pythagorean wins (exponent 14).
 - **Expected shooting** (2026-27 on, from real shots): shot quality is the eFG% the league makes from
   the spots a player shoots from (shot value and distance to the foot); shot-making is his eFG% minus that.
+- **Similar seasons**: every player-season with 500 minutes (prorated, never under 200) as twelve stats (box
+  score per 36, TS%, USG%, 3PA and FT rate, WS/48, BPM), each a z-score within its own season, so eras compare
+  by standing, not raw numbers. Nearest by RMS distance over the stats both seasons have, needing three
+  quarters of the player's. Computed in memory from the whole history, cached an hour.
 - **Approximated**, with the shortcut named in a comment on each function: individual ORtg/DRtg, Win
   Shares and BPM. The site shows the published PER/WS/BPM/VORP; the only approximations on screen are
   individual ORtg/DRtg, which nobody publishes, and they're left empty before 1973-74.

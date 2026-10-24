@@ -4,7 +4,7 @@ import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
-  careerAdvanced, careerTotals, expectedShooting, stintRatings, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
+  careerAdvanced, careerTotals, expectedShooting, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
 } from './stats';
 import { ordinal } from './format';
 
@@ -138,6 +138,24 @@ assert.deepEqual(ladder.map((l) => l.row.id), ['c', 'b', 'a'], 'ranked by averag
 near(ladder[0].score, 1.3195, 0.001, 'top score');
 near(ladder[2].score, -0.9659, 0.001, 'bottom score');
 assert.equal(zLadder([{ x: 5 }, { x: 5 }], [(r) => r.x])[0].score, 0, 'no spread, no z');
+
+// --- Similar seasons --------------------------------------------------------
+// Season 1 scores 0 and 10, season 2 100 and 200: both z to -1 and +1, so the
+// low scorer of season 2 is the low scorer of season 1's match, eras apart.
+const zs = zBySeason([
+  { playerId: 1, seasonId: 1, stats: [0, 5] },
+  { playerId: 2, seasonId: 1, stats: [10, 5] },
+  { playerId: 3, seasonId: 2, stats: [100, null] },
+  { playerId: 4, seasonId: 2, stats: [200, null] },
+  { playerId: 1, seasonId: 2, stats: [150, null] },
+]);
+// Season 2 is 100, 200 and 150: mean 150, SD 40.82.
+near(zs.find((r) => r.playerId === 3)!.stats[0]!, -1.2247, 0.001, 'z within its own season');
+assert.equal(zs[0].stats[1], null, 'no spread, no z');
+const near1 = nearestSeasons(zs, zs[0], 3, 1);
+assert.deepEqual(near1.map((m) => m.row.playerId), [3, 2, 4], 'nearest first, his own seasons skipped');
+near(near1[0].distance, 0.2247, 0.001, 'distance over the stats both have');
+assert.equal(nearestSeasons(zs, zs[0], 3, 2).length, 0, 'too few shared stats, no match');
 
 // --- Lineup stints ---------------------------------------------------------
 // 12 minutes, 30-24 on 25 and 23 possessions (24 averaged): 125 / 100 per 100.

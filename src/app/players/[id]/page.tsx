@@ -11,6 +11,7 @@ import { TrendChart } from '@/components/TrendChart';
 import { ViewTabs } from '@/components/ViewTabs';
 import { feetInches, fmt, ordinal, perGame } from '@/lib/format';
 import { seasonShooting } from '@/lib/leaders';
+import { FEATURES, MIN_MINUTES, similarSeasons } from '@/lib/similar';
 import { careerAdvanced, careerTotals, expectedShooting, minGames, percentileOf, scaledFloor, stintRatings, type SeasonLine } from '@/lib/stats';
 
 export const revalidate = 60;
@@ -150,6 +151,32 @@ export default async function PlayerPage({
   const clutchOn = onCourt.filter((s) => s.clutch);
   const clutchR = stintRatings(clutchOn);
   const cs = clutchSum?._sum;
+
+  // --- Most similar seasons in history ---------------------------------------
+  const matches = season ? await similarSeasons(id, season.id) : null;
+  const pairs = (matches ?? []).map((m) => ({ playerId: m.row.playerId, seasonId: m.row.seasonId }));
+  const [matchLines, matchAdv] = pairs.length
+    ? await Promise.all([
+        prisma.playerStats.findMany({
+          where: { OR: pairs },
+          include: { player: { select: { fullName: true, birthDate: true } }, season: true, team: { select: { abbreviation: true } } },
+        }),
+        prisma.advancedStats.findMany({ where: { OR: pairs }, select: { playerId: true, seasonId: true, bpm: true, ws48: true } }),
+      ])
+    : [[], []];
+  const ageIn = (birth: Date | null, endYear: number) =>
+    birth ? Math.floor((Date.UTC(endYear, 1, 1) - birth.getTime()) / (365.25 * 864e5)) : null;
+  const similar = (matches ?? []).flatMap((m) => {
+    const l = matchLines.find((x) => x.playerId === m.row.playerId && x.seasonId === m.row.seasonId);
+    const x = matchAdv.find((a) => a.playerId === m.row.playerId && a.seasonId === m.row.seasonId);
+    return l
+      ? [{
+          playerId: l.playerId, name: l.player.fullName, season: l.season.key, age: ageIn(l.player.birthDate, l.season.endYear),
+          team: l.team?.abbreviation ?? '', gp: l.gp, ppg: l.ppg, rpg: l.rpg, apg: l.apg, tsPct: l.tsPct,
+          bpm: x?.bpm ?? null, ws48: x?.ws48 ?? null, shared: m.shared,
+        }]
+      : [];
+  });
 
   // --- Percentile rankings against the qualified field -----------------------
   // Each player qualifies on his own team's games (as /leaders does): early on,
@@ -512,6 +539,69 @@ export default async function PlayerPage({
           </p>
         )}
       </section>
+
+      {season && (
+        <section>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-bold tracking-tight">Most similar seasons, {season.key}</h2>
+            <span className="text-xs" style={{ color: 'var(--ink-3)' }}>
+              Other players&apos; seasons nearest this one on {FEATURES.join(', ')}, each measured against its own season&apos;s league.
+            </span>
+          </div>
+          {similar.length ? (
+            <div className="panel overflow-x-auto">
+              <table className="stat-table">
+                <thead>
+                  <tr>
+                    {['Player', 'Season', 'Age', 'Team', 'GP', 'PTS', 'REB', 'AST', 'TS%', 'BPM', 'WS/48', 'Matched on'].map((h) => (
+                      <th key={h} style={{ cursor: 'default' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    {
+                      playerId: id, name: player.fullName, season: season.key, age: ageIn(player.birthDate, season.endYear),
+                      team: line?.team?.abbreviation ?? '', gp: line?.gp ?? null, ppg: line?.ppg ?? null, rpg: line?.rpg ?? null,
+                      apg: line?.apg ?? null, tsPct: line?.tsPct ?? null, bpm: lineAdv?.bpm ?? null, ws48: lineAdv?.ws48 ?? null, shared: null,
+                    },
+                    ...similar,
+                  ].map((r, i) => (
+                    <tr key={`${r.playerId}-${r.season}`} className={i === 0 ? 'font-bold' : undefined} style={i === 0 ? { background: 'var(--panel-2)' } : undefined}>
+                      <td>
+                        {i === 0 ? (
+                          r.name
+                        ) : (
+                          <Link href={`/players/${r.playerId}?season=${r.season}`} className="link">
+                            {r.name}
+                          </Link>
+                        )}
+                      </td>
+                      <td>{r.season}</td>
+                      <td>{r.age ?? '—'}</td>
+                      <td>{r.team}</td>
+                      <td>{r.gp ?? '—'}</td>
+                      <td>{fmt(r.ppg)}</td>
+                      <td>{fmt(r.rpg)}</td>
+                      <td>{fmt(r.apg)}</td>
+                      <td>{fmt(r.tsPct)}</td>
+                      <td>{fmt(r.bpm)}</td>
+                      <td>{fmt(r.ws48, 3)}</td>
+                      <td>{r.shared === null ? '' : `${r.shared} of ${FEATURES.length}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="panel p-4 text-sm" style={{ color: 'var(--ink-3)' }}>
+              {matches === null
+                ? `Not enough of ${season.key} to compare yet: it takes 200 minutes, and ${MIN_MINUTES} over a full season. Pick an earlier season above.`
+                : 'No season in history shares enough of these stats to compare.'}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="grid gap-5 lg:grid-cols-2">
         <TrendChart

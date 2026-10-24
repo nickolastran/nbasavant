@@ -523,6 +523,55 @@ export function careerAdvanced(lines: AdvancedLine[]) {
   };
 }
 
+// --- Similar seasons ----------------------------------------------------------
+
+/** One player-season as a list of stats, null where the league didn't keep one. */
+export type SeasonVector = { playerId: number; seasonId: number; stats: (number | null)[] };
+
+/** Each stat as a z-score within its own season, so 1962's rebounding is judged against 1962. */
+export function zBySeason(rows: SeasonVector[]): SeasonVector[] {
+  const bySeason = new Map<number, SeasonVector[]>();
+  for (const r of rows) {
+    const list = bySeason.get(r.seasonId);
+    if (list) list.push(r);
+    else bySeason.set(r.seasonId, [r]);
+  }
+  return [...bySeason.values()].flatMap((season) => {
+    const scale = season[0].stats.map((_, i) => {
+      const v = season.map((r) => r.stats[i]).filter((x): x is number => x !== null);
+      const mean = v.reduce((a, x) => a + x, 0) / (v.length || 1);
+      const sd = Math.sqrt(v.reduce((a, x) => a + (x - mean) ** 2, 0) / (v.length || 1));
+      return { mean, sd };
+    });
+    return season.map((r) => ({
+      ...r,
+      stats: r.stats.map((x, i) => (x === null || !scale[i].sd ? null : (x - scale[i].mean) / scale[i].sd)),
+    }));
+  });
+}
+
+/**
+ * The `n` seasons by other players nearest `target`, by root-mean-square
+ * distance over the z-scored stats both have, needing `minShared` of them.
+ * ponytail: fewer shared stats means a noisier distance, unpenalized beyond the
+ * caller's `minShared`; weight by the count if old seasons crowd the lists.
+ */
+export function nearestSeasons(rows: SeasonVector[], target: SeasonVector, n: number, minShared: number) {
+  const out: { row: SeasonVector; distance: number; shared: number }[] = [];
+  for (const r of rows) {
+    if (r.playerId === target.playerId) continue;
+    let sum = 0, shared = 0;
+    for (let i = 0; i < r.stats.length; i++) {
+      const a = r.stats[i], b = target.stats[i];
+      if (a === null || b === null) continue;
+      sum += (a - b) ** 2;
+      shared++;
+    }
+    if (shared >= minShared) out.push({ row: r, distance: Math.sqrt(sum / shared), shared });
+  }
+  return out.sort((a, b) => a.distance - b.distance).slice(0, n);
+}
+
 // --- Qualifying and ranking ---------------------------------------------------
 
 /**
