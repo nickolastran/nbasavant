@@ -33,7 +33,7 @@ const broad = (pos: string | null | undefined) =>
 const periodName = (p: number) => (p <= 4 ? `Q${p}` : p === 5 ? 'OT' : `${p - 4}OT`);
 const pct = (m: number | null, a: number | null) => (m !== null && a ? (m / a) * 100 : null);
 
-function Card({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
+export function Card({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
     <section className="panel p-3">
       <h2 className="mb-2 flex items-baseline justify-between border-b pb-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em]" style={{ borderColor: 'var(--line)' }}>
@@ -45,7 +45,7 @@ function Card({ title, children, action }: { title: string; children: ReactNode;
   );
 }
 
-const muted = { color: 'var(--ink-3)' };
+export const muted = { color: 'var(--ink-3)' };
 
 /**
  * The Game tab: who's on the floor, win probability, the season's team stats
@@ -105,7 +105,7 @@ export async function GameTab({ game, data, standings }: { game: GameInfo; data:
   );
 }
 
-function TeamHead({ team }: { team: Team }) {
+export function TeamHead({ team }: { team: Team }) {
   return (
     <div className="flex items-center gap-2 py-1.5 text-sm font-semibold">
       <TeamMark abbr={team.abbreviation} color={team.primaryColor} size={22} />

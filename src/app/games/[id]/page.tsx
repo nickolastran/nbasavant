@@ -10,6 +10,7 @@ import { liveGame } from '@/lib/live';
 import type { Broadcast } from '@/lib/nba';
 import { TeamBox } from './box-score';
 import { GameTab, type GameInfo } from './game-tab';
+import { Preview } from './preview';
 import { Tabs, TabPanel } from './tabs';
 import { TeamStats } from './team-stats';
 
@@ -215,7 +216,12 @@ async function NbaGame({ game, standings, tab }: { game: GameRow; standings: Sta
       <Tabs tabs={TABS} current={tab} />
       <TabPanel tab={tab}>
 
-        {tab === '' && <GameTab game={info} data={data} standings={standings} />}
+        {tab === '' && (
+          <div className="space-y-4">
+            {!scored && <Preview game={info} />}
+            <GameTab game={info} data={data} standings={standings} />
+          </div>
+        )}
 
         {tab === 'box' &&
           (!data ? (

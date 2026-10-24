@@ -43,7 +43,7 @@ docker compose up -d db
 |---|---|
 | every page | Scoreboard strip under the nav: live on game nights, a calendar to jump days |
 | `/scores` | A day's games, live, with each side's top performer |
-| `/games/[id]` | 2026-27 on: linescore, box scores, team stats, real shot chart, play-by-play, updating while live |
+| `/games/[id]` | 2026-27 on: before tip-off a preview (both teams' percentiles, head to head, last ten, best lineups); then linescore, box scores, team stats, real shot chart, play-by-play, updating while live |
 | `/schedule` | Upcoming games (or results) by day, by team; preseason, NBA Cup and international games labeled |
 | `/standings` | Conference / division / league. W-L, GB, home, road, division, conference, PPG, streak, L10, Pythagorean xW-L, net rating, for any season |
 | `/leaders` | Sixteen leaderboards (per game, shooting, PER/BPM/WS/VORP) and a Team Leaders view |

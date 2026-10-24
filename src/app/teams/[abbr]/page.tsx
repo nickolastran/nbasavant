@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { byRecord, latestSeason, prisma, seasonStandings } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
-import { PercentileBars, type Percentile } from '@/components/PercentileBars';
+import { PercentileBars } from '@/components/PercentileBars';
 import { StatTable } from '@/components/StatTable';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
 import { todayEt } from '@/lib/dates';
 import { feetInches, fmt, ordinal, pct3, perGame } from '@/lib/format';
-import { minGames, percentileOf, stintRatings } from '@/lib/stats';
+import { minGames } from '@/lib/stats';
+import { teamLineups, teamPercentiles } from '@/lib/team';
 
 export const revalidate = 60;
 
@@ -26,20 +27,6 @@ const LEADERS = [
   { key: 'bpg', label: 'Blocks' },
   { key: 'tpm', label: 'Threes made' },
   { key: 'per', label: 'PER' },
-] as const;
-
-/** Team ratings with a direction; pace has none, so it's printed, not ranked. */
-const RATINGS = [
-  { key: 'ortg', label: 'Offensive rating' },
-  { key: 'drtg', label: 'Defensive rating', low: true },
-  { key: 'netRtg', label: 'Net rating' },
-  { key: 'efgPct', label: 'Effective FG%', unit: '%' },
-  { key: 'tovPct', label: 'Turnover %', unit: '%', low: true },
-  { key: 'orebPct', label: 'Off. rebound %', unit: '%' },
-  { key: 'ftRate', label: 'Free throw rate', dp: 3 },
-  { key: 'oppEfgPct', label: 'Opp. eFG%', unit: '%', low: true },
-  { key: 'oppTovPct', label: 'Forced TOV %', unit: '%' },
-  { key: 'drebPct', label: 'Def. rebound %', unit: '%' },
 ] as const;
 
 export default async function TeamPage({
@@ -149,36 +136,10 @@ export default async function TeamPage({
   }));
 
   const rated = ratingSource.find((t) => t.teamId === team.id);
-  const ranks: Percentile[] = rated
-    ? RATINGS.flatMap((r) => {
-        const mine = rated[r.key];
-        const field = ratingSource.map((t) => t[r.key]).filter((v): v is number => v !== null);
-        if (mine === null || field.length < 2) return [];
-        const pct = percentileOf(mine, field, 'low' in r && r.low);
-        const value = fmt(mine, 'dp' in r ? r.dp : 1, 'unit' in r ? r.unit : '');
-        return [{ label: r.label, value, pct, title: `${r.label}: ${value}, ${ordinal(pct)} percentile of ${field.length} teams` }];
-      })
-    : [];
+  const ranks = teamPercentiles(team.id, ratingSource);
 
-  // Five-man lineups from the play-by-play (2026-27 on), most-used first.
-  const stints = await prisma.stint.findMany({
-    where: { seasonId: season.id, teamId: team.id },
-    select: { players: true, gameId: true, seconds: true, pts: true, oppPts: true, poss: true, oppPoss: true },
-  });
-  const surnames = new Map(
-    (await prisma.player.findMany({ where: { id: { in: [...new Set(stints.flatMap((s) => s.players))] } }, select: { id: true, lastName: true } }))
-      .map((p) => [p.id, p.lastName]),
-  );
-  const byLineup = new Map<string, typeof stints>();
-  for (const s of stints) byLineup.set(s.players.join(), [...(byLineup.get(s.players.join()) ?? []), s]);
-  const lineups = [...byLineup.values()].map((group) => {
-    const r = stintRatings(group);
-    return {
-      lineup: group[0].players.map((id) => surnames.get(id) ?? id).join(' · '),
-      gp: new Set(group.map((s) => s.gameId)).size,
-      min: r.min, plusMinus: r.plusMinus, ortg: r.ortg, drtg: r.drtg, net: r.net,
-    };
-  });
+  // Five-man lineups from the play-by-play (2026-27 on).
+  const lineups = await teamLineups(season.id, team.id);
 
   const seasonLabel = (g: (typeof games)[number]) =>
     g.kind === 'preseason' ? 'Preseason' : g.kind === 'playoffs' ? 'Playoffs' : g.kind === 'play-in' ? 'Play-In' : g.label;
