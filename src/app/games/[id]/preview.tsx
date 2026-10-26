@@ -94,7 +94,17 @@ function HeadToHead({ away, home, meetings }: { away: Team; home: Team; meetings
   const regular = meetings.filter((g) => g.kind === 'regular');
   const playoffs = meetings.filter((g) => g.kind !== 'regular');
   return (
-    <Card title="Head to head">
+    <Card
+      title="Head to head"
+      action={
+        <Link
+          href={`/compare?view=teams&teams=${away.abbreviation},${home.abbreviation}`}
+          className="link text-[0.6875rem] font-normal normal-case tracking-normal"
+        >
+          Compare side by side
+        </Link>
+      }
+    >
       {!meetings.length ? (
         <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
           First meeting.

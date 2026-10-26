@@ -25,7 +25,7 @@ const CUBE = [
   { href: '/playoffs', label: 'Playoffs', hint: 'Bracket for every season' },
   { href: '/awards', label: 'Awards', hint: 'MVP, DPOY, ROY race' },
   { href: '/salaries', label: 'Salaries', hint: 'Cap sheets and deals' },
-  { href: '/compare', label: 'Compare', hint: 'Players side by side' },
+  { href: '/compare', label: 'Compare', hint: 'Players or teams side by side' },
   { href: '/defense', label: 'Defense', hint: 'Opponent shooting, rim protection' },
   { href: '/lineups', label: 'Lineups', hint: 'Best and worst units, league-wide' },
   { href: '/shots', label: 'Shot Charts', hint: 'Every attempt, mapped' },
