@@ -7,7 +7,8 @@
  */
 import { after } from 'next/server';
 import { prisma } from './db';
-import { FEEDS, benchReason, clockParts, leaderOf, lineOf, logsFromBox, nbaJson, playsFromPbp, shotsFromPbp, type Leader } from './nba';
+import { shortNames } from './format';
+import { FEEDS, benchReason, clockParts, leaderOf, lineOf, logsFromBox, nbaJson, playsFromPbp, shotsFromPbp, stintsFromPbp, type Leader } from './nba';
 import { syncGame } from './sync';
 
 export type LiveState = 'pre' | 'live' | 'final';
@@ -189,6 +190,29 @@ export async function liveGame(gameCode: string, final: boolean) {
     logs: logsFromBox(box).map((l) => ({ ...l, name: names.get(l.playerId) ?? '' })),
     plays: pbp ? playsFromPbp(pbp) : [],
     shots: pbp ? shotsFromPbp(pbp).map((s) => ({ ...s, player: names.get(s.playerId) ?? '' })) : [],
+    rotation: pbp ? rotationOf(pbp, box) : null,
   };
+}
+
+export type Rotation = NonNullable<ReturnType<typeof rotationOf>>;
+
+/**
+ * Who was on the floor when, for the rotation chart: each lineup stint and the
+ * players' short names. A play-by-play it can't make sense of just means no chart.
+ */
+function rotationOf(pbp: any, box: any) {
+  try {
+    const players = [box.homeTeam, box.awayTeam].flatMap((t) => t.players as any[]);
+    return {
+      stints: stintsFromPbp(pbp, box).stints.map(({ teamId, players, start, seconds, pts, oppPts }) => ({
+        teamId, players, start, seconds, pts, oppPts,
+      })),
+      names: Object.fromEntries(
+        shortNames(players.map((p) => ({ id: p.personId as number, firstName: p.firstName as string, lastName: p.familyName as string }))),
+      ),
+    };
+  } catch {
+    return null;
+  }
 }
 

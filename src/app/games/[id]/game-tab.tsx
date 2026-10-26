@@ -181,13 +181,18 @@ function WinChance({ game, data }: { game: GameInfo; data: Live }) {
     });
   }
   const last = Math.max(4, ...data.plays.map((p) => p.period));
+  const length = 2880 + (last - 4) * 300;
+  const side = (t: Team) => ({ id: t.id, abbr: t.abbreviation, color: t.primaryColor });
   return (
     <Card title="Win probability">
       <WinProbability
         points={points}
-        length={2880 + (last - 4) * 300}
+        length={length}
         home={game.home.abbreviation}
         away={game.away.abbreviation}
+        rotation={data.rotation}
+        teams={[side(game.away), side(game.home)]}
+        now={data.state === 'live' ? points.at(-1)!.t : length}
       />
     </Card>
   );
