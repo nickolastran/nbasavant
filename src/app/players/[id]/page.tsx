@@ -14,7 +14,7 @@ import { feetInches, fmt, ordinal, perGame } from '@/lib/format';
 import { seasonDefense, seasonShooting, type Defense } from '@/lib/leaders';
 import { FEATURES, MIN_MINUTES, similarSeasons } from '@/lib/similar';
 import {
-  activeStreak, careerAdvanced, careerTotals, expectedShooting, minGames, nextMilestone, onPace, percentileOf, scaledFloor, stintRatings,
+  activeStreak, careerAdvanced, careerTotals, expectedShooting, minGames, nextMilestone, onPace, percentileOf, scaledFloor, splitLogs, stintRatings,
   type SeasonLine,
 } from '@/lib/stats';
 
@@ -98,7 +98,7 @@ export default async function PlayerPage({
   const line = player.stats.find((s) => s.seasonId === season?.id);
   const lineAdv = season ? adv.get(season.id) : undefined;
 
-  const [field, teamGp, shots, logs, moves] = await Promise.all([
+  const [field, teamGp, shots, logs, moves, allLogs] = await Promise.all([
     season
       ? prisma.playerStats.findMany({ where: { seasonId: season.id }, include: { player: { select: { advancedStats: { where: { seasonId: season.id } } } } } })
       : [],
@@ -124,6 +124,10 @@ export default async function PlayerPage({
         })
       : [],
     prisma.transaction.findMany({ where: { playerId: id }, include: { team: true }, orderBy: { date: 'desc' }, take: 20 }),
+    prisma.playerGameLog.findMany({
+      where: { playerId: id, game: { kind: 'regular' } },
+      include: { game: { include: { homeTeam: { select: { abbreviation: true } }, awayTeam: { select: { abbreviation: true } } } } },
+    }),
   ]);
 
   // Expected shooting needs the whole league's real shots, so only seasons that have them.
@@ -329,6 +333,20 @@ export default async function PlayerPage({
       plusMinus: l.plusMinus,
     };
   });
+
+  // Every regular-season game we have, not just this season's, summed by opponent.
+  const vsRows = splitLogs(
+    allLogs.map((l) => {
+      const home = l.teamId === l.game.homeTeamId;
+      return {
+        ...l,
+        opp: home ? l.game.awayTeam.abbreviation : l.game.homeTeam.abbreviation,
+        won: home ? l.game.homeScore > l.game.awayScore : l.game.awayScore > l.game.homeScore,
+      };
+    }),
+    (l) => l.opp,
+  ).map(({ key, ...s }) => ({ opp: key, ...s }));
+  const logsSince = allLogs.length ? seasons.find((s) => allLogs.some((l) => l.seasonId === s.id))?.key : null;
 
   const myX = xShot.get(id);
   const shotNote = !season
@@ -791,6 +809,43 @@ export default async function PlayerPage({
           pageSize={25}
         />
       </section>
+
+      {vsRows.length > 0 && (
+        <section>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-bold tracking-tight">Vs. opponents</h2>
+            <span className="text-xs" style={{ color: 'var(--ink-3)' }}>
+              Regular season, per game, since {logsSince}, when our game logs start.
+            </span>
+          </div>
+          <StatTable
+            rows={vsRows}
+            cols={
+              [
+                { key: 'opp', label: 'Opp' },
+                { key: 'gp', label: 'GP' },
+                { key: 'record', label: 'W-L' },
+                { key: 'min', label: 'MIN', dp: 1 },
+                { key: 'pts', label: 'PTS', dp: 1, shade: true },
+                { key: 'reb', label: 'REB', dp: 1, shade: true },
+                { key: 'ast', label: 'AST', dp: 1, shade: true },
+                { key: 'stl', label: 'STL', dp: 1 },
+                { key: 'blk', label: 'BLK', dp: 1 },
+                { key: 'tov', label: 'TOV', dp: 1, lowerIsBetter: true },
+                { key: 'fgPct', label: 'FG%', dp: 1 },
+                { key: 'fg3Pct', label: '3P%', dp: 1 },
+                { key: 'ftPct', label: 'FT%', dp: 1 },
+                { key: 'tsPct', label: 'TS%', dp: 1, shade: true },
+              ] as Col<(typeof vsRows)[number]>[]
+            }
+            initialSort="gp"
+            href={{ base: '/teams', key: 'opp' }}
+            teamLogo="opp"
+            filename={`${player.fullName}-vs-opponents`}
+            pageSize={30}
+          />
+        </section>
+      )}
 
       {moves.length > 0 && (
         <section>

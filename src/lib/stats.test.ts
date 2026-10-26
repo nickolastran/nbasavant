@@ -5,7 +5,7 @@ import {
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
   careerAdvanced, careerTotals, expectedShooting, MIN_TYPE_ATTEMPTS, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
-  activeStreak, nextMilestone, onPace,
+  activeStreak, nextMilestone, onPace, splitLogs,
 } from './stats';
 import { ordinal, shortNames } from './format';
 
@@ -167,6 +167,24 @@ assert.deepEqual(nextMilestone(30000, 1000), { at: 31000, left: 1000 }, 'reached
 assert.equal(activeStreak([25, 31, 20, 12, 40], (p) => p >= 20), 3, 'newest three at 20+');
 assert.equal(activeStreak([12, 30], (p) => p >= 20), 0, 'broken last game');
 assert.equal(activeStreak([22, 30], (p) => p >= 20), 2, 'every game so far');
+
+// --- Splits by opponent ------------------------------------------------------
+const g = (opp: string, won: boolean, o: Partial<BoxTotals>) => ({ ...box(o), opp, won });
+const vs = splitLogs(
+  [
+    g('NYK', true, { min: 36, pts: 30, fgm: 10, fga: 20, fg3m: 4, fg3a: 8, ftm: 6, fta: 6 }),
+    g('MIA', false, { min: 30, pts: 10, fta: 0 }),
+    g('NYK', false, { min: 34, pts: 20, fgm: 8, fga: 20, fg3m: 0, fg3a: 4, ftm: 4, fta: 4 }),
+  ],
+  (l) => l.opp,
+);
+assert.deepEqual(vs.map((s) => s.key), ['NYK', 'MIA'], 'most games first');
+assert.equal(vs[0].record, '1-1');
+near(vs[0].pts, 25, 0.001, 'points per game vs NYK');
+near(vs[0].fgPct!, 45, 0.001, 'FG% on summed makes, not averaged');
+near(vs[0].fg3Pct!, 33.333, 0.001, '3P% on summed makes');
+assert.equal(vs[1].fgPct, null, 'no shots: no FG%');
+assert.equal(vs[1].tsPct, null, 'no shots: no TS%');
 
 // --- Lineup stints ---------------------------------------------------------
 // 12 minutes, 30-24 on 25 and 23 possessions (24 averaged): 125 / 100 per 100.

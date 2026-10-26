@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { PercentileBars } from '@/components/PercentileBars';
 import { prisma } from '@/lib/db';
 import { fmt } from '@/lib/format';
+import { splitLogs } from '@/lib/stats';
 import { lineups, teamPercentiles } from '@/lib/team';
 import { Card, TeamHead, muted, type GameInfo } from './game-tab';
 
@@ -22,7 +23,7 @@ const won = (g: { homeTeamId: number; homeScore: number; awayScore: number }, te
  */
 export async function Preview({ game }: { game: GameInfo }) {
   const { away, home } = game;
-  const [season, current, meetings, awayForm, homeForm, awayUnits, homeUnits] = await Promise.all([
+  const [season, current, meetings, awayForm, homeForm, awayUnits, homeUnits, awayVs, homeVs] = await Promise.all([
     prisma.season.findUniqueOrThrow({ where: { id: game.seasonId } }),
     prisma.teamStats.findMany({ where: { seasonId: game.seasonId } }),
     prisma.game.findMany({
@@ -40,6 +41,8 @@ export async function Preview({ game }: { game: GameInfo }) {
     lastTen(home.id),
     lineups(game.seasonId, { teamId: away.id }),
     lineups(game.seasonId, { teamId: home.id }),
+    versus(away.id, home.id),
+    versus(home.id, away.id),
   ]);
 
   const prev = current.length < 2
@@ -74,6 +77,12 @@ export async function Preview({ game }: { game: GameInfo }) {
           </div>
         </Card>
       </div>
+      <Card title="Players vs. opponent" action={<span className="text-[0.6875rem] font-normal normal-case tracking-normal" style={muted}>Regular season, per game, since our logs start</span>}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Versus team={away} opp={home} rows={awayVs} />
+          <Versus team={home} opp={away} rows={homeVs} />
+        </div>
+      </Card>
       <Card title={`Best lineups, ${game.seasonKey}`} action={<span className="text-[0.6875rem] font-normal normal-case tracking-normal" style={muted}>By net rating once a unit has {LINEUP_FLOOR}+ minutes</span>}>
         <div className="grid gap-4 md:grid-cols-2">
           <Lineups team={away} units={awayUnits} />
@@ -197,6 +206,61 @@ function Form({ team, games }: { team: Team; games: FormGame[] }) {
       ) : (
         <p className="text-[0.8125rem]" style={muted}>
           No games yet.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Each player now on `teamId`, summed over every regular-season game he's played against `oppId`, for any team. */
+async function versus(teamId: number, oppId: number) {
+  const logs = await prisma.playerGameLog.findMany({
+    where: {
+      player: { teamId },
+      teamId: { not: oppId },
+      game: { kind: 'regular', OR: [{ homeTeamId: oppId }, { awayTeamId: oppId }] },
+    },
+    include: { player: { select: { fullName: true } }, game: { select: { homeTeamId: true, homeScore: true, awayScore: true } } },
+  });
+  const names = new Map(logs.map((l) => [String(l.playerId), l.player.fullName]));
+  return splitLogs(logs.map((l) => ({ ...l, won: won(l.game, l.teamId) })), (l) => String(l.playerId))
+    .sort((a, b) => b.pts * b.gp - a.pts * a.gp)
+    .slice(0, 5)
+    .map((s) => ({ ...s, name: names.get(s.key)! }));
+}
+
+function Versus({ team, opp, rows }: { team: Team; opp: Team; rows: Awaited<ReturnType<typeof versus>> }) {
+  return (
+    <div>
+      <TeamHead team={team} />
+      {rows.length ? (
+        <table className="tnum w-full text-[0.8125rem]">
+          <thead>
+            <tr className="text-[0.625rem] font-semibold uppercase" style={muted}>
+              <th className="text-left font-semibold">vs {opp.abbreviation}</th>
+              {['GP', 'PTS', 'REB', 'AST', 'FG%'].map((h) => (
+                <th key={h} className="w-11 text-right font-semibold">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key} className="border-t" style={{ borderColor: 'var(--line)' }}>
+                <td className="py-1.5">
+                  <Link href={`/players/${r.key}`} className="link">{r.name}</Link>
+                </td>
+                <td className="text-right">{r.gp}</td>
+                <td className="text-right font-semibold">{fmt(r.pts)}</td>
+                <td className="text-right">{fmt(r.reb)}</td>
+                <td className="text-right">{fmt(r.ast)}</td>
+                <td className="text-right">{fmt(r.fgPct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="text-[0.8125rem]" style={muted}>
+          No games against the {opp.name} on file yet.
         </p>
       )}
     </div>

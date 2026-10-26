@@ -606,6 +606,32 @@ export function activeStreak<T>(games: T[], test: (g: T) => boolean) {
   return i === -1 ? games.length : i;
 }
 
+type LogLine = Pick<BoxTotals, 'min' | 'pts' | 'reb' | 'ast' | 'stl' | 'blk' | 'tov' | 'fgm' | 'fga' | 'fg3m' | 'fg3a' | 'ftm' | 'fta'>;
+
+/**
+ * Game logs summed by `key` (his opponent, or a player against one opponent):
+ * the record, per-game box and shooting on the summed makes and attempts.
+ * Most games first.
+ */
+export function splitLogs<T extends LogLine & { won: boolean }>(logs: T[], key: (l: T) => string) {
+  const by = new Map<string, T[]>();
+  for (const l of logs) by.set(key(l), [...(by.get(key(l)) ?? []), l]);
+  return [...by]
+    .map(([k, games]) => {
+      const sum = (f: keyof LogLine) => games.reduce((s, g) => s + g[f], 0);
+      const gp = games.length, w = games.filter((g) => g.won).length;
+      const [pts, fga, fta, fg3a] = [sum('pts'), sum('fga'), sum('fta'), sum('fg3a')];
+      return {
+        key: k, gp, w, l: gp - w, record: `${w}-${gp - w}`,
+        min: sum('min') / gp, pts: pts / gp, reb: sum('reb') / gp, ast: sum('ast') / gp,
+        stl: sum('stl') / gp, blk: sum('blk') / gp, tov: sum('tov') / gp,
+        fgPct: fga ? pct(sum('fgm'), fga) : null, fg3Pct: fg3a ? pct(sum('fg3m'), fg3a) : null,
+        ftPct: fta ? pct(sum('ftm'), fta) : null, tsPct: fga || fta ? tsPct({ pts, fga, fta }) : null,
+      };
+    })
+    .sort((a, b) => b.gp - a.gp || b.pts - a.pts);
+}
+
 // --- Qualifying and ranking ---------------------------------------------------
 
 /**
