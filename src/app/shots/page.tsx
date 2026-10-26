@@ -34,17 +34,10 @@ export default async function ShotsPage({
         select: { id: true, fullName: true, team: { select: { abbreviation: true } } },
       })
     : null;
-  const defender = sp.defender
-    ? await prisma.player.findFirst({
-        where: { fullName: { contains: sp.defender, mode: 'insensitive' } },
-        select: { id: true, fullName: true },
-      })
-    : null;
 
   const where: Prisma.ShotDataWhereInput = {
     season: { key: seasonKey },
     ...(player ? { playerId: player.id } : {}),
-    ...(defender ? { defenderId: defender.id } : {}),
     ...(sp.team ? { team: { abbreviation: sp.team } } : {}),
     ...(sp.zone ? { zone: sp.zone } : {}),
     ...(sp.result ? { made: sp.result === 'made' } : {}),
@@ -64,9 +57,8 @@ export default async function ShotsPage({
       where,
       select: {
         x: true, y: true, made: true, value: true, distanceFt: true, zone: true,
-        actionType: true, period: true, minsLeft: true, secsLeft: true, defDistFt: true,
+        actionType: true, period: true, minsLeft: true, secsLeft: true,
         player: { select: { fullName: true } },
-        defender: { select: { fullName: true } },
       },
       take: MAX_PLOTTED,
     }),
@@ -130,7 +122,6 @@ export default async function ShotsPage({
           fields={[
             { kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: seasonKey },
             { kind: 'text', name: 'player', label: 'Shooter', placeholder: 'Player name' },
-            { kind: 'text', name: 'defender', label: 'Defender', placeholder: 'Player name' },
             { kind: 'select', name: 'team', label: 'Team', options: TEAM_OPTIONS, logos: true },
             {
               kind: 'select', name: 'zone', label: 'Zone',
@@ -173,7 +164,7 @@ export default async function ShotsPage({
             (s): Shot => ({
               x: s.x, y: s.y, made: s.made, value: s.value, distanceFt: s.distanceFt,
               zone: s.zone, action: s.actionType, player: s.player.fullName,
-              defender: s.defender?.fullName ?? null, period: s.period,
+              period: s.period,
               clock: `${s.minsLeft}:${String(s.secsLeft).padStart(2, '0')}`,
             }),
           )}

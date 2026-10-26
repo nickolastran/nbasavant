@@ -11,7 +11,7 @@ import { StatTable, type Col } from '@/components/StatTable';
 import { TrendChart } from '@/components/TrendChart';
 import { ViewTabs } from '@/components/ViewTabs';
 import { feetInches, fmt, ordinal, perGame } from '@/lib/format';
-import { seasonShooting } from '@/lib/leaders';
+import { seasonDefense, seasonShooting, type Defense } from '@/lib/leaders';
 import { FEATURES, MIN_MINUTES, similarSeasons } from '@/lib/similar';
 import {
   activeStreak, careerAdvanced, careerTotals, expectedShooting, minGames, nextMilestone, onPace, percentileOf, scaledFloor, stintRatings,
@@ -111,7 +111,6 @@ export default async function PlayerPage({
           select: {
             x: true, y: true, made: true, value: true, distanceFt: true, zone: true, eventNum: true,
             actionType: true, period: true, minsLeft: true, secsLeft: true,
-            defender: { select: { fullName: true } },
           },
         })
       : [],
@@ -146,6 +145,9 @@ export default async function PlayerPage({
       ])
     : [[], null];
   const onCourt = teamStints.filter((s) => s.players.includes(id));
+  // Opponents' shooting with him on the floor; the whole league's, for his percentiles.
+  const defense = realShots && teamStints.length ? await seasonDefense(season!.id) : new Map<number, Defense>();
+  const myDef = defense.get(id);
   const onOff = onCourt.length
     ? [
         { label: 'On court', ...stintRatings(onCourt) },
@@ -206,6 +208,16 @@ export default async function PlayerPage({
     {
       label: 'Shot-making', signed: true, get: (f) => xShot.get(f.playerId)?.shotMaking ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
       title: 'eFG% minus expected eFG%, in points: zero is an average shooter on his shots',
+    },
+    {
+      label: 'Opp. shooting', signed: true, low: true, get: (f) => defense.get(f.playerId)?.diff ?? null,
+      floor: (f) => (defense.get(f.playerId)?.oppFga ?? 0) >= scaledFloor(2000, gamesOf(f)),
+      title: "Opponents' eFG% minus what their shots deserved, with him on the floor: below zero is good defense",
+    },
+    {
+      label: 'Rim FG% allowed', unit: '%', low: true, get: (f) => defense.get(f.playerId)?.rimFg ?? null,
+      floor: (f) => (defense.get(f.playerId)?.rimFga ?? 0) >= scaledFloor(600, gamesOf(f)),
+      title: 'What opponents shot in the restricted area with him on the floor',
     },
     { label: 'Three-point %', unit: '%', get: (f) => f.fg3Pct, floor: (f) => (f.fg3a ?? 0) >= scaledFloor(100, gamesOf(f)) },
     { label: 'Free throw %', unit: '%', get: (f) => f.ftPct, floor: (f) => f.fta >= scaledFloor(100, gamesOf(f)) },
@@ -481,7 +493,7 @@ export default async function PlayerPage({
             shots={shots.map(
               (s): Shot => ({
                 x: s.x, y: s.y, made: s.made, value: s.value, distanceFt: s.distanceFt,
-                zone: s.zone, action: s.actionType, defender: s.defender?.fullName ?? null,
+                zone: s.zone, action: s.actionType,
                 period: s.period, clock: `${s.minsLeft}:${String(s.secsLeft).padStart(2, '0')}`,
               }),
             )}
@@ -566,6 +578,42 @@ export default async function PlayerPage({
               The NBA&apos;s clutch: the last five minutes of the fourth or overtime, the score within five.
             </p>
           </div>
+          {myDef && (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold">Defense, {season?.key}</h2>
+              <div className="panel overflow-x-auto">
+                <table className="stat-table">
+                  <thead>
+                    <tr>
+                      {['Opponents', 'FGA', 'Shot', 'Expected', 'Diff'].map((h) => (
+                        <th key={h} style={{ cursor: 'default' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ['All shots, eFG%', myDef.oppFga, myDef.oppEfg, myDef.oppXEfg, myDef.diff],
+                      ['At the rim, FG%', myDef.rimFga, myDef.rimFg, myDef.rimXFg, myDef.rimDiff],
+                    ].map(([label, fga, shot, x, diff]) => (
+                      <tr key={label as string}>
+                        <td>{label}</td>
+                        <td>{fga}</td>
+                        <td>{fmt(shot as number | null)}</td>
+                        <td>{fmt(x as number | null)}</td>
+                        <td style={{ color: diff === null ? undefined : (diff as number) < 0 ? 'var(--pos)' : 'var(--neg)' }}>
+                          {diff === null ? '—' : `${(diff as number) > 0 ? '+' : ''}${fmt(diff as number)}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-xs" style={{ color: 'var(--ink-3)' }}>
+                What opponents shot with him on the floor, against what the league makes from those same shots. All five
+                defenders share every attempt, so it&apos;s noisy early. <Link href="/defense" className="link">League board</Link>
+              </p>
+            </div>
+          )}
         </section>
       )}
 

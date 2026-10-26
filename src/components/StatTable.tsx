@@ -56,8 +56,10 @@ export function StatTable<T extends Record<string, any>>({
   rows, cols, initialSort, href, filename = 'nba-savant', pageSize = 50, firstPage = pageSize, tall, photo, teamLogo, ranked, caption,
   empty = 'No players match these filters. Try widening the minimum games or clearing the team.',
 }: Props<T>) {
+  // A column opens best-first: highest, or lowest where lower is better.
+  const bestFirst = (key: string) => (cols.find((c) => c.key === key)?.lowerIsBetter ? 'asc' : 'desc');
   const [sort, setSort] = useState<string>(initialSort ?? cols[1]?.key ?? cols[0].key);
-  const [dir, setDir] = useState<'asc' | 'desc'>('desc');
+  const [dir, setDir] = useState<'asc' | 'desc'>(() => bestFirst(sort));
   const [shown, setShown] = useState(firstPage);
 
   const sorted = useMemo(() => {
@@ -108,7 +110,7 @@ export function StatTable<T extends Record<string, any>>({
     if (key === sort) setDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else {
       setSort(key);
-      setDir('desc');
+      setDir(bestFirst(key));
     }
   };
 

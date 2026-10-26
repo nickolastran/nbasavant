@@ -307,14 +307,17 @@ export const MIN_TYPE_ATTEMPTS = 100;
  * of the spot, so early in a season it's location alone and the types come in
  * as they fill. Shot-making is eFG% minus expected eFG%, in points: zero is an
  * average shooter on his diet.
+ *
+ * `league` prices the spots when `groups` isn't every shot once: the defense
+ * boards key each shot to the five defenders on the floor.
  * ponytail: no defender or clock. Add them the same way, as a finer bucket once filled.
  */
-export function expectedShooting(groups: ShotGroup[]) {
+export function expectedShooting(groups: ShotGroup[], league: ShotGroup[] = groups) {
   const spot = (g: ShotGroup) => `${g.value}:${Math.min(g.distanceFt, 30)}`;
   const typed = (g: ShotGroup) => `${spot(g)}:${g.type?.toLowerCase() ?? ''}`;
   const tally = (key: (g: ShotGroup) => string) => {
     const m = new Map<string, { made: number; att: number }>();
-    for (const g of groups) {
+    for (const g of league) {
       const b = m.get(key(g)) ?? { made: 0, att: 0 };
       b.att += g.n;
       if (g.made) b.made += g.n;
@@ -323,11 +326,11 @@ export function expectedShooting(groups: ShotGroup[]) {
     return m;
   };
   const byType = tally(typed);
-  const bucket = (g: ShotGroup) => (g.type && byType.get(typed(g))!.att >= MIN_TYPE_ATTEMPTS ? typed(g) : spot(g));
-  const league = tally(bucket);
+  const bucket = (g: ShotGroup) => (g.type && (byType.get(typed(g))?.att ?? 0) >= MIN_TYPE_ATTEMPTS ? typed(g) : spot(g));
+  const rates = tally(bucket);
   const players = new Map<number, { fga: number; pts: number; xPts: number }>();
   for (const g of groups) {
-    const b = league.get(bucket(g))!;
+    const b = rates.get(bucket(g))!;
     const p = players.get(g.playerId) ?? { fga: 0, pts: 0, xPts: 0 };
     p.fga += g.n;
     if (g.made) p.pts += g.n * g.value;

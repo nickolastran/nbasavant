@@ -284,7 +284,7 @@ async function HomeContent() {
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { href: '/explorer', title: 'Stat Explorer', body: 'Sort and filter every player-season, then export it.' },
-          { href: '/shots', title: 'Shot Chart Analyzer', body: 'Filter shots by zone, distance, defender and period.' },
+          { href: '/shots', title: 'Shot Chart Analyzer', body: 'Filter shots by shooter, team, zone and result.' },
           { href: '/compare', title: 'Compare Players', body: 'Up to four players side by side, box score and advanced.' },
           { href: '/teams', title: 'Teams', body: 'Rosters, leaders, schedules and every season since 1946-47.' },
         ].map((c) => (

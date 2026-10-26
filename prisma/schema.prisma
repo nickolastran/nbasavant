@@ -91,7 +91,6 @@ model Player {
   advancedStats AdvancedStats[]
   gameLogs      PlayerGameLog[]
   shots         ShotData[]
-  defendedShots ShotData[]      @relation("defender")
   clutchLogs    ClutchLog[]
 
   @@index([fullName])
@@ -327,7 +326,6 @@ model ShotData {
   gameId     Int
   seasonId   Int
   teamId     Int
-  defenderId Int?
   /// Who assisted a made shot, from the play-by-play (real shots only).
   assistId   Int?
   eventNum   Int?
@@ -335,7 +333,6 @@ model ShotData {
   game       Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
   season     Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   team       Team    @relation(fields: [teamId], references: [id])
-  defender   Player? @relation("defender", fields: [defenderId], references: [id])
 
   x          Int
   y          Int
@@ -349,7 +346,6 @@ model ShotData {
   minsLeft   Int
   secsLeft   Int
   shotClock  Float?
-  defDistFt  Float?
   date       DateTime
 
   @@unique([gameId, eventNum])

@@ -6,7 +6,7 @@ export const revalidate = 86400;
 
 const PAGES = [
   '', 'scores', 'game-feed', 'schedule', 'standings', 'leaders', 'players', 'team-stats', 'teams',
-  'transactions', 'playoffs', 'draft', 'injuries', 'depth-charts', 'awards', 'salaries', 'compare', 'shots', 'explorer',
+  'transactions', 'playoffs', 'draft', 'injuries', 'depth-charts', 'awards', 'salaries', 'compare', 'defense', 'shots', 'explorer',
 ];
 
 // ponytail: one file, under the 50k-URL cap while games stay current-season only;

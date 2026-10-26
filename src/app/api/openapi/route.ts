@@ -83,7 +83,6 @@ export async function GET() {
           summary: 'Individual shot attempts with coordinates',
           parameters: [
             { name: 'player', in: 'query', schema: { type: 'integer' } },
-            { name: 'defender', in: 'query', schema: { type: 'integer' } },
             { name: 'game', in: 'query', schema: { type: 'integer' } },
             { name: 'team', in: 'query', schema: { type: 'string' } },
             seasonParam,

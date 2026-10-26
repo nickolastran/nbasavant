@@ -65,7 +65,53 @@ export async function seasonShooting(seasonId: number) {
   return expectedShooting(groups.map(({ actionType, _count, ...g }) => ({ ...g, type: actionType, n: _count })));
 }
 
-type Totals = { seconds: number; pts: number; oppPts: number; poss: number; oppPoss: number };
+/**
+ * What opponents shot with each player on the floor, against what the league
+ * makes from those same shots: every real shot keyed to the five defenders on
+ * for it (the stint the shooter's opponent had going at that second), priced
+ * by the same model as shot-making. Below zero, opponents shot worse than
+ * their shots deserved. "Rim" is the restricted area. On-court, not matchup:
+ * the play-by-play doesn't say who contested a shot.
+ */
+export async function seasonDefense(seasonId: number) {
+  const [league, rows] = await Promise.all([
+    prisma.shotData.groupBy({
+      by: ['playerId', 'value', 'distanceFt', 'actionType', 'made', 'zone'],
+      where: { seasonId, eventNum: { not: null } },
+      _count: true,
+    }),
+    prisma.$queryRaw<{ playerId: number; value: number; distanceFt: number; type: string; made: boolean; zone: string; n: number }[]>`
+      select d.pid as "playerId", sd.value, sd."distanceFt", sd."actionType" as type, sd.made, sd.zone, count(*)::int as n
+      from shot_data sd
+      join games g on g.id = sd."gameId"
+      join stints st on st."gameId" = sd."gameId"
+        and st."teamId" = case when sd."teamId" = g."homeTeamId" then g."awayTeamId" else g."homeTeamId" end
+        and (case when sd.period <= 4 then sd.period * 720 else 2880 + (sd.period - 4) * 300 end
+             - (sd."minsLeft" * 60 + sd."secsLeft")) > st.start
+        and (case when sd.period <= 4 then sd.period * 720 else 2880 + (sd.period - 4) * 300 end
+             - (sd."minsLeft" * 60 + sd."secsLeft")) <= st.start + st.seconds
+      cross join unnest(st.players) as d(pid)
+      where sd."seasonId" = ${seasonId} and sd."eventNum" is not null
+      group by 1, 2, 3, 4, 5, 6`,
+  ]);
+  const rim = (g: { zone: string }) => g.zone === 'Restricted Area';
+  const all = league.map(({ actionType, _count, ...g }) => ({ ...g, type: actionType, n: _count }));
+  const overall = expectedShooting(rows, all);
+  const atRim = expectedShooting(rows.filter(rim), all.filter(rim));
+  return new Map(
+    [...overall].map(([id, o]) => {
+      const r = atRim.get(id);
+      return [id, {
+        oppFga: o.fga, oppEfg: o.efg, oppXEfg: o.xEfg, diff: o.shotMaking,
+        // Every rim shot is a two, so its eFG% is its FG%.
+        rimFga: r?.fga ?? 0, rimFg: r?.efg ?? null, rimXFg: r?.xEfg ?? null, rimDiff: r?.shotMaking ?? null,
+      }];
+    }),
+  );
+}
+export type Defense = NonNullable<ReturnType<Awaited<ReturnType<typeof seasonDefense>>['get']>>;
+
+type Totals ={ seconds: number; pts: number; oppPts: number; poss: number; oppPoss: number };
 const add = (a: Totals, b: Totals): Totals => ({
   seconds: a.seconds + b.seconds, pts: a.pts + b.pts, oppPts: a.oppPts + b.oppPts, poss: a.poss + b.poss, oppPoss: a.oppPoss + b.oppPoss,
 });

@@ -394,4 +394,18 @@ assert.ok(Math.abs(winProbability(4, 600) + winProbability(-4, 600, -2.5) - 1) <
   assert.deepEqual([...names.values()], ['Jal. Williams', 'Jay. Williams', 'K. Williams', 'Caruso'], 'namesakes told apart, shortest prefix');
 }
 
+// Defense keys every shot to five defenders; `league` keeps it priced at the shooters' rates.
+{
+  const shooters = [
+    { playerId: 1, value: 2, distanceFt: 1, made: true, n: 60 },
+    { playerId: 1, value: 2, distanceFt: 1, made: false, n: 40 },
+  ];
+  const defenders = [10, 11, 12, 13, 14].flatMap((d) => shooters.map((g) => ({ ...g, playerId: d, made: g.made, n: g.n })));
+  // Defender 10 only saw the misses: 0% against a 60% look.
+  const d = expectedShooting([...defenders.filter((g) => g.playerId !== 10), { ...shooters[1], playerId: 10 }], shooters);
+  near(d.get(10)!.xEfg, 60, 0.01, 'priced at the league rate, not his own sample');
+  near(d.get(10)!.efg, 0, 0.01, 'what opponents shot with him on');
+  near(d.get(11)!.shotMaking, 0, 0.01, 'an average night is zero');
+}
+
 console.log('stats.ts: all checks passed');

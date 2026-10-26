@@ -6,7 +6,7 @@ import { downloadSvgAsPng } from '@/lib/export';
 
 export type Shot = {
   x: number; y: number; made: boolean; value: number; distanceFt: number;
-  zone: string; action?: string; player?: string; defender?: string | null;
+  zone: string; action?: string; player?: string;
   clock?: string; period?: number;
 };
 
@@ -270,6 +270,5 @@ const shotLines = (s: Shot) =>
     `${s.made ? 'Made' : 'Missed'} ${s.value}PT — ${s.distanceFt} ft`,
     s.action ?? s.zone,
     s.player ?? '',
-    s.defender ? `Closest defender: ${s.defender}` : '',
     s.period ? `Q${s.period} ${s.clock ?? ''}` : '',
   ].filter(Boolean);
