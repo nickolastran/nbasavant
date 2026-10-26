@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { animate, motion, useMotionValue } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DatePicker } from '@/components/DatePicker';
+import { favoriteTeams, useFavorites } from '@/components/Favorites';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
 import { shiftDay, tipAt, todayEt } from '@/lib/dates';
@@ -70,6 +71,7 @@ function merge(g: Game, l: LiveGame | undefined): Game {
  */
 export function useLive(games: Game[], date: string) {
   const [live, setLive] = useState<Record<string, LiveGame>>({});
+  const favs = favoriteTeams(useFavorites());
   const recent = date >= shiftDay(todayEt(), -1);
 
   useEffect(() => {
@@ -105,18 +107,29 @@ export function useLive(games: Game[], date: string) {
     };
   }, [recent, date, games]);
 
-  // Finals drop to the end; within each group, earliest tip-off first, so a finished day reads in the order it was played.
+  // A favorite's games go first; then finals drop to the end; within each group, earliest tip-off first, so a finished day reads in the order it was played.
   // Past finals have no time on record and keep the database's order.
   // ponytail: no tip-off column, so a past day isn't sorted; store gameTimeUTC in sync if that matters.
   const tip = (g: Game) => (g.start ? Date.parse(g.start) : tipAt(g.date, g.status)?.getTime()) ?? Infinity;
   const done = (g: Game) => Number(stateOf(g) === 'final');
+  const pin = (g: Game) => Number(!isFavorite(g, favs));
   return games
     .map((g) => merge(g, live[g.gameCode]))
-    .sort((a, b) => done(a) - done(b) || tip(a) - tip(b) || 0);
+    .sort((a, b) => pin(a) - pin(b) || done(a) - done(b) || tip(a) - tip(b) || 0);
 }
+
+export const isFavorite = (g: Game, favs: Set<string>) => favs.has(g.home) || favs.has(g.away);
+
+/** The star on a favorite's game card. */
+export const FavoriteMark = () => (
+  <span aria-label="Favorite" style={{ color: 'var(--s4)' }}>
+    ★
+  </span>
+);
 
 export function GameCard({ g }: { g: Game }) {
   const state = stateOf(g);
+  const fav = isFavorite(g, favoriteTeams(useFavorites()));
   const scored = state !== 'pre';
   const tag = g.kind === 'preseason' ? 'Preseason' : g.kind === 'playoffs' ? 'Playoffs' : g.kind === 'play-in' ? 'Play-In' : g.label;
   const side = (abbr: string, score: number, record: string, color: string, won: boolean) => (
@@ -158,6 +171,7 @@ export function GameCard({ g }: { g: Game }) {
             {tag}
           </span>
         )}
+        {fav && <span className={tag ? '' : 'ml-auto'}><FavoriteMark /></span>}
       </span>
       {side(g.away, g.awayScore, g.awayRecord, g.awayColor, final && g.awayScore > g.homeScore)}
       {side(g.home, g.homeScore, g.homeRecord, g.homeColor, final && g.homeScore > g.awayScore)}

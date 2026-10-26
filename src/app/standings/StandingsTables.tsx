@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { Standing } from '@/lib/db';
 import { TeamMark } from '@/components/TeamMark';
+import { FavoriteMark } from '@/components/ScoreboardBar';
+import { favoriteTeams, useFavorites } from '@/components/Favorites';
 import { colsFor, type Col, type ColSet } from './columns';
 
 type Section = { title: string | null; groups: { title: string; rows: Standing[] }[] };
@@ -54,6 +56,7 @@ function Group({
     if (y === null) return -1;
     return worst ? x - y : y - x;
   });
+  const favs = favoriteTeams(useFavorites());
   const cell = (c: Col) => ({ textAlign: 'center' as const, ...(c.sep && { borderLeft: '1px solid var(--line-2)' }) });
   return (
     <section className="panel overflow-hidden">
@@ -89,7 +92,10 @@ function Group({
           </thead>
           <tbody>
             {sorted.map((r, i) => (
-              <tr key={r.teamId} className={lines.includes(i + 1) ? 'cutline' : undefined}>
+              <tr
+                key={r.teamId}
+                className={[lines.includes(i + 1) && 'cutline', favs.has(r.abbr) && 'fav'].filter(Boolean).join(' ') || undefined}
+              >
                 <td>
                   <span className="flex items-center gap-2">
                     <span className="tnum w-5 shrink-0 text-right text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
@@ -99,6 +105,7 @@ function Group({
                     <Link href={`/teams/${r.abbr}`} className="link truncate font-medium" style={{ color: 'var(--ink)' }}>
                       {r.name}
                     </Link>
+                    {favs.has(r.abbr) && <FavoriteMark />}
                   </span>
                 </td>
                 {cols.map((c) => (

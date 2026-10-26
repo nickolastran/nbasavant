@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { prisma } from '@/lib/db';
 import { FilterBar } from '@/components/FilterBar';
+import { FavoriteStar } from '@/components/Favorites';
 import { Headshot } from '@/components/Headshot';
 import { PercentileBars, type Percentile } from '@/components/PercentileBars';
 import { ShotChart, type Shot } from '@/components/ShotChart';
@@ -366,7 +367,10 @@ export default async function PlayerPage({
                 .filter(Boolean)
                 .join(' · ')}
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">{player.fullName}</h1>
+            <h1 className="flex items-center gap-1 text-2xl font-bold tracking-tight">
+              {player.fullName}
+              <FavoriteStar player={player.id} team={player.team?.abbreviation ?? null} />
+            </h1>
             <div className="mt-1 text-xs" style={{ color: 'var(--ink-2)' }}>
               {bio.join(' · ')}
             </div>

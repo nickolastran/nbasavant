@@ -269,6 +269,12 @@ select:focus {
 
 /* The postseason line in a standings table: below the last playoff seed and
    below the last play-in seed. */
+/* A viewer's favorite team, sticky first cell included (it paints its own background). */
+.stat-table tbody tr.fav td,
+.stat-table tbody tr.fav td:first-child {
+  background: color-mix(in srgb, var(--s4) 12%, var(--panel));
+}
+
 .stat-table tbody tr.cutline td {
   border-bottom: 2px solid var(--line-2);
 }

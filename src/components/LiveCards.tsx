@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DatePicker } from '@/components/DatePicker';
 import { Headshot } from '@/components/Headshot';
-import { stateOf, useLive, type Game } from '@/components/ScoreboardBar';
+import { favoriteTeams, useFavorites } from '@/components/Favorites';
+import { FavoriteMark, isFavorite, stateOf, useLive, type Game } from '@/components/ScoreboardBar';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
 import type { LiveLeader } from '@/lib/live';
@@ -35,6 +36,7 @@ const periodLabel = (i: number) => (i < 4 ? String(i + 1) : i === 4 ? 'OT' : `${
  */
 function ScoreCard({ g }: { g: Game }) {
   const state = stateOf(g);
+  const fav = isFavorite(g, favoriteTeams(useFavorites()));
   const scored = state !== 'pre';
   const final = state === 'final';
   const tag = g.kind === 'preseason' ? 'Preseason' : g.kind === 'playoffs' ? 'Playoffs' : g.kind === 'play-in' ? 'Play-In' : g.label;
@@ -100,6 +102,7 @@ function ScoreCard({ g }: { g: Game }) {
           {tag}
         </span>
       )}
+      {fav && <span className={tag ? '' : 'ml-auto'}><FavoriteMark /></span>}
     </div>
   );
 

@@ -6,6 +6,7 @@ import { AssistNetwork } from '@/components/AssistNetwork';
 import { FilterBar } from '@/components/FilterBar';
 import { PercentileBars } from '@/components/PercentileBars';
 import { StatTable } from '@/components/StatTable';
+import { FavoriteStar } from '@/components/Favorites';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
 import { todayEt } from '@/lib/dates';
@@ -157,7 +158,10 @@ export default async function TeamPage({
               {me?.conference ? ` · ${me.conference}ern Conference` : me?.division ? ` · ${me.division} Division` : ''}
               {me?.division && me?.conference ? ` · ${me.division}` : ''}
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">{name}</h1>
+            <h1 className="flex items-center gap-1 text-2xl font-bold tracking-tight">
+              {name}
+              <FavoriteStar team={team.abbreviation} />
+            </h1>
             <div className="mt-1 text-sm" style={{ color: 'var(--ink-2)' }}>
               {me && (
                 <>
