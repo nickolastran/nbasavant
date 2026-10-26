@@ -6,11 +6,15 @@
  * sync keeps the current season's playoffs up to date once they start; this
  * fills in history. Re-running a season replaces it.
  *
+ * `--games` loads each season's playoff games instead (one request a season),
+ * for the bracket on /playoffs. From 2026-27 on the NBA feed brings them.
+ *
  *   npm run playoffs                            # 2025-26
  *   npm run playoffs -- --from 1947 --to 2026   # seasons by end year
+ *   npm run playoffs -- --from 1947 --games     # every season's playoff games
  */
 import { prisma } from '../src/lib/db';
-import { fetchPage, fetchPlayoffs, parseTeams, seasonPath } from '../src/lib/bref';
+import { fetchPage, fetchPlayoffs, gameRow, parseTeams, seasonPath, table } from '../src/lib/bref';
 import { writePlayoffs } from '../src/lib/sync';
 
 const arg = (name: string, fallback: string) => {
@@ -18,8 +22,20 @@ const arg = (name: string, fallback: string) => {
   return i > -1 ? process.argv[i + 1] : fallback;
 };
 
+/** One season's playoff games from BR's playoff schedule, replacing any already saved. */
+async function games(s: { id: number; key: string; endYear: number }) {
+  const rows = table(await fetchPage(`/playoffs/${seasonPath(s.endYear)}_games.html`), 'schedule');
+  const data = rows.filter((r) => Number(r.home_pts) > 0).map((r) => gameRow(r, s.id, 'playoffs'));
+  await prisma.$transaction([
+    prisma.game.deleteMany({ where: { seasonId: s.id, kind: 'playoffs' } }),
+    prisma.game.createMany({ data }),
+  ]);
+  console.log(`${s.key}: ${data.length} playoff games`);
+}
+
 async function main() {
-  const to = Number(arg('to', '2026'));
+  // The NBA feed owns games from 2026-27 (end year 2027) on.
+  const to = Math.min(Number(arg('to', '2026')), process.argv.includes('--games') ? 2026 : Infinity);
   const from = Number(arg('from', String(to)));
   const seasons = await prisma.season.findMany({
     where: { endYear: { gte: from, lte: to } },
@@ -27,6 +43,10 @@ async function main() {
   });
   for (const s of seasons) {
     try {
+      if (process.argv.includes('--games')) {
+        await games(s);
+        continue;
+      }
       const league = parseTeams(await fetchPage(`/leagues/${seasonPath(s.endYear)}.html`));
       await prisma.$transaction(
         league.map((t) =>

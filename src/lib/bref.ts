@@ -171,6 +171,25 @@ export function seasonLine(r: Row): SeasonLine {
   };
 }
 
+/** A played game from one of BR's schedule tables, as a `games` row. */
+export function gameRow(r: Row, seasonId: number, kind: 'regular' | 'playoffs') {
+  const code = /^(\d{4})(\d{2})(\d{2})/.exec(r.date_game_csk ?? '');
+  const ot = r.overtimes ?? '';
+  return {
+    gameCode: r.date_game_csk || `${r.date_game}|${r.home_team_name_abbr}`,
+    seasonId,
+    date: code ? new Date(`${code[1]}-${code[2]}-${code[3]}T12:00:00Z`) : new Date(r.date_game),
+    homeTeamId: teamIdFor(r.home_team_name_abbr),
+    awayTeamId: teamIdFor(r.visitor_team_name_abbr),
+    homeScore: Number(r.home_pts) || 0,
+    awayScore: Number(r.visitor_pts) || 0,
+    // BR's overtime column is '', 'OT', '2OT', ...
+    status: `Final${ot ? `/${ot}` : ''}`,
+    period: 4 + (ot ? Number(ot.replace('OT', '')) || 1 : 0),
+    kind,
+  };
+}
+
 /**
  * The NBA Cup final is played in December but doesn't count toward anyone's
  * record. BR marks every Cup game the same way, so the final is simply the

@@ -23,7 +23,7 @@
  * dot is a real shot. Real shots start with 2026-27, from the NBA's feed.
  */
 import { TEAMS } from '../prisma/teams';
-import { cupFinal, fetchPage, fetchSeason, playerIndex, seasonPath, table, teamIdFor, type Row } from '../src/lib/bref';
+import { cupFinal, fetchPage, fetchSeason, gameRow, playerIndex, seasonPath, table, teamIdFor, type Row } from '../src/lib/bref';
 import { prisma } from '../src/lib/db';
 import { legacyId, matcher, resolvePlayer } from '../src/lib/identity';
 import { FEEDS, inches, nbaJson, rowsOf } from '../src/lib/nba';
@@ -234,21 +234,7 @@ async function seasonGames(year: number, seasonId: number, teamGp: Map<number, n
     if ((played.get(home) ?? 0) >= (teamGp.get(home) ?? 82) || (played.get(away) ?? 0) >= (teamGp.get(away) ?? 82)) continue;
     played.set(home, (played.get(home) ?? 0) + 1);
     played.set(away, (played.get(away) ?? 0) + 1);
-    const code = /^(\d{4})(\d{2})(\d{2})/.exec(r.date_game_csk ?? '');
-    const ot = r.overtimes ?? '';
-    games.push({
-      gameCode: r.date_game_csk || `${r.date_game}|${r.home_team_name_abbr}`,
-      seasonId,
-      date: code ? new Date(`${code[1]}-${code[2]}-${code[3]}T12:00:00Z`) : new Date(r.date_game),
-      homeTeamId: home,
-      awayTeamId: away,
-      homeScore: num(r.home_pts),
-      awayScore: num(r.visitor_pts),
-      // BR's overtime column is '', 'OT', '2OT', ...
-      status: `Final${ot ? `/${ot}` : ''}`,
-      period: 4 + (ot ? Number(ot.replace('OT', '')) || 1 : 0),
-      kind: 'regular',
-    });
+    games.push(gameRow(r, seasonId, 'regular'));
   }
   await chunked(games, 1000, (c) => prisma.game.createMany({ data: c, skipDuplicates: true }));
   return { games: games.length, cupFinal: skip };

@@ -27,6 +27,10 @@ export function TeamMark({
       className="shrink-0 object-contain"
       style={box}
       onError={() => setBroken(true)}
+      // A logo that failed before hydration never fires onError for React; catch it on mount.
+      ref={(img) => {
+        if (img?.complete && !img.naturalWidth) setBroken(true);
+      }}
     />
   );
 }
