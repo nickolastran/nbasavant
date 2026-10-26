@@ -33,23 +33,45 @@ export function teamPercentiles(teamId: number, league: Rated[]): Percentile[] {
   });
 }
 
-/** Every five-man unit a team used in a season, from the play-by-play (2026-27 on). */
-export async function teamLineups(seasonId: number, teamId: number) {
+/** Every pair inside a five, each once: ten of them. */
+const pairsOf = (ids: number[]) => ids.flatMap((a, i) => ids.slice(i + 1).map((b) => [a, b]));
+
+/**
+ * Every unit a team, or with no `teamId` the whole league, used in a season,
+ * from the play-by-play (2026-27 on). `size` 5 is the lineup; 2 is each pair
+ * of teammates, summed over every lineup they shared.
+ */
+export async function lineups(seasonId: number, { teamId, size = 5 }: { teamId?: number; size?: 2 | 5 } = {}) {
   const stints = await prisma.stint.findMany({
-    where: { seasonId, teamId },
-    select: { players: true, gameId: true, seconds: true, pts: true, oppPts: true, poss: true, oppPoss: true },
+    where: { seasonId, ...(teamId ? { teamId } : {}) },
+    select: { teamId: true, players: true, gameId: true, seconds: true, pts: true, oppPts: true, poss: true, oppPoss: true },
   });
   const surnames = shortNames(
     await prisma.player.findMany({ where: { id: { in: [...new Set(stints.flatMap((s) => s.players))] } }, select: { id: true, firstName: true, lastName: true } }),
   );
-  const byLineup = new Map<string, typeof stints>();
-  for (const s of stints) byLineup.set(s.players.join(), [...(byLineup.get(s.players.join()) ?? []), s]);
-  return [...byLineup.values()].map((group) => {
-    const r = stintRatings(group);
+  type Unit = { teamId: number; players: number[]; games: Set<number>; seconds: number; pts: number; oppPts: number; poss: number; oppPoss: number };
+  const units = new Map<string, Unit>();
+  for (const s of stints) {
+    for (const players of size === 5 ? [s.players] : pairsOf(s.players)) {
+      const key = `${s.teamId}:${players.join()}`;
+      const u = units.get(key) ?? { teamId: s.teamId, players, games: new Set(), seconds: 0, pts: 0, oppPts: 0, poss: 0, oppPoss: 0 };
+      u.games.add(s.gameId);
+      u.seconds += s.seconds;
+      u.pts += s.pts;
+      u.oppPts += s.oppPts;
+      u.poss += s.poss;
+      u.oppPoss += s.oppPoss;
+      units.set(key, u);
+    }
+  }
+  return [...units.values()].map((u) => {
+    const r = stintRatings([u]);
     return {
-      lineup: group[0].players.map((id) => surnames.get(id) ?? id).join(' · '),
-      gp: new Set(group.map((s) => s.gameId)).size,
-      min: r.min, plusMinus: r.plusMinus, ortg: r.ortg, drtg: r.drtg, net: r.net,
+      teamId: u.teamId,
+      players: u.players,
+      lineup: u.players.map((id) => surnames.get(id) ?? id).join(' · '),
+      gp: u.games.size,
+      min: r.min, poss: r.poss, plusMinus: r.plusMinus, ortg: r.ortg, drtg: r.drtg, net: r.net,
     };
   });
 }

@@ -27,6 +27,7 @@ const CUBE = [
   { href: '/salaries', label: 'Salaries', hint: 'Cap sheets and deals' },
   { href: '/compare', label: 'Compare', hint: 'Players side by side' },
   { href: '/defense', label: 'Defense', hint: 'Opponent shooting, rim protection' },
+  { href: '/lineups', label: 'Lineups', hint: 'Best and worst units, league-wide' },
   { href: '/shots', label: 'Shot Charts', hint: 'Every attempt, mapped' },
   { href: '/explorer', label: 'Stat Explorer', hint: 'Filter and sort anything' },
   { href: '/api-docs', label: 'API', hint: 'The data, as JSON' },

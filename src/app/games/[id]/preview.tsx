@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { PercentileBars } from '@/components/PercentileBars';
 import { prisma } from '@/lib/db';
 import { fmt } from '@/lib/format';
-import { teamLineups, teamPercentiles } from '@/lib/team';
+import { lineups, teamPercentiles } from '@/lib/team';
 import { Card, TeamHead, muted, type GameInfo } from './game-tab';
 
 type Team = GameInfo['away'];
@@ -38,8 +38,8 @@ export async function Preview({ game }: { game: GameInfo }) {
     }),
     lastTen(away.id),
     lastTen(home.id),
-    teamLineups(game.seasonId, away.id),
-    teamLineups(game.seasonId, home.id),
+    lineups(game.seasonId, { teamId: away.id }),
+    lineups(game.seasonId, { teamId: home.id }),
   ]);
 
   const prev = current.length < 2
@@ -193,7 +193,7 @@ function Form({ team, games }: { team: Team; games: FormGame[] }) {
   );
 }
 
-function Lineups({ team, units }: { team: Team; units: Awaited<ReturnType<typeof teamLineups>> }) {
+function Lineups({ team, units }: { team: Team; units: Awaited<ReturnType<typeof lineups>> }) {
   // Too early for any unit to clear the floor: show the most-used ones instead, unranked by net.
   const ranked = units.filter((u) => u.min >= LINEUP_FLOOR && u.net !== null).sort((a, b) => b.net! - a.net!);
   const best = (ranked.length ? ranked : [...units].sort((a, b) => b.min - a.min)).slice(0, 3);

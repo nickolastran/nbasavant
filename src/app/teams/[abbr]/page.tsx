@@ -12,7 +12,7 @@ import { Tip } from '@/components/Tip';
 import { todayEt } from '@/lib/dates';
 import { feetInches, fmt, ordinal, pct3, perGame } from '@/lib/format';
 import { minGames } from '@/lib/stats';
-import { assistNetwork, teamLineups, teamPercentiles } from '@/lib/team';
+import { assistNetwork, lineups as teamUnits, teamPercentiles } from '@/lib/team';
 
 export const revalidate = 60;
 
@@ -141,7 +141,7 @@ export default async function TeamPage({
   const ranks = teamPercentiles(team.id, ratingSource);
 
   // Five-man lineups from the play-by-play (2026-27 on).
-  const [lineups, assists] = await Promise.all([teamLineups(season.id, team.id), assistNetwork(season.id, team.id)]);
+  const [lineups, assists] = await Promise.all([teamUnits(season.id, { teamId: team.id }), assistNetwork(season.id, team.id)]);
 
   const seasonLabel = (g: (typeof games)[number]) =>
     g.kind === 'preseason' ? 'Preseason' : g.kind === 'playoffs' ? 'Playoffs' : g.kind === 'play-in' ? 'Play-In' : g.label;
