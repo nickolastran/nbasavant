@@ -77,7 +77,7 @@ export async function Preview({ game }: { game: GameInfo }) {
           </div>
         </Card>
       </div>
-      <Card title="Players vs. opponent" action={<span className="text-[0.6875rem] font-normal normal-case tracking-normal" style={muted}>Regular season, per game, since our logs start</span>}>
+      <Card title="Players vs. opponent" action={<span className="text-[0.6875rem] font-normal normal-case tracking-normal" style={muted}>Regular season, per game, since 1996-97</span>}>
         <div className="grid gap-4 md:grid-cols-2">
           <Versus team={away} opp={home} rows={awayVs} />
           <Versus team={home} opp={away} rows={homeVs} />

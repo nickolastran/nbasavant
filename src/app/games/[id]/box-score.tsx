@@ -114,11 +114,12 @@ export function TeamBox({
             <col className="w-64" />
           </colgroup>
           <tbody>
-            <Heads label="Starters" />
+            {/* Logs from before our box-score sync don't say who started. */}
+            {starters.length > 0 && <Heads label="Starters" />}
             {starters.map((l) => (
               <Row key={l.playerId} l={l} on={onCourt.includes(l.playerId)} />
             ))}
-            <Heads label="Bench" />
+            <Heads label={starters.length ? 'Bench' : 'Players'} />
             {bench.map((l) => (
               <Row key={l.playerId} l={l} on={onCourt.includes(l.playerId)} />
             ))}

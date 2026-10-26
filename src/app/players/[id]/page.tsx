@@ -346,7 +346,6 @@ export default async function PlayerPage({
     }),
     (l) => l.opp,
   ).map(({ key, ...s }) => ({ opp: key, ...s }));
-  const logsSince = allLogs.length ? seasons.find((s) => allLogs.some((l) => l.seasonId === s.id))?.key : null;
 
   const myX = xShot.get(id);
   const shotNote = !season
@@ -783,7 +782,7 @@ export default async function PlayerPage({
       <section>
         <h2 className="mb-2 text-lg font-bold tracking-tight">Game log, {season?.key}</h2>
         <StatTable
-          empty="Game logs start with 2026-27, from the NBA's box scores."
+          empty="Game logs go back to 1996-97, from the NBA's stats."
           rows={logRows}
           cols={
             [
@@ -815,7 +814,7 @@ export default async function PlayerPage({
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-lg font-bold tracking-tight">Vs. opponents</h2>
             <span className="text-xs" style={{ color: 'var(--ink-3)' }}>
-              Regular season, per game, since {logsSince}, when our game logs start.
+              Regular season, per game. Game logs go back to 1996-97.
             </span>
           </div>
           <StatTable

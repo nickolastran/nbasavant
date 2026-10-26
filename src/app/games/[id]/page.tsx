@@ -282,8 +282,8 @@ async function PastGame({ game, standings }: { game: GameRow; standings: Standin
       <Header game={game} standings={standings} away={{ score: game.awayScore }} home={{ score: game.homeScore }} status={game.status} />
       {logs.length === 0 && (
         <p className="panel p-6 text-sm" style={{ color: 'var(--ink-2)' }}>
-          Final score from basketball-reference. Box scores, play-by-play and real shot charts start with
-          2026-27, from the NBA&apos;s feed. See the{' '}
+          Final score from basketball-reference. Box scores go back to 1996-97; play-by-play and real shot
+          charts start with 2026-27, from the NBA&apos;s feed. See the{' '}
           <Link href={`/teams/${game.awayTeam.abbreviation}?season=${game.season.key}`} className="link">
             {game.awayTeam.name}
           </Link>{' '}
