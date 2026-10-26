@@ -5,10 +5,14 @@ import { SiteSearch } from '@/components/SiteSearch';
 import { ScoreboardBar } from '@/components/ScoreboardBar';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SiteNav } from '@/components/SiteNav';
+import { SITE_URL } from '@/lib/og';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: { default: 'NBA Savant', template: '%s · NBA Savant' },
   description: 'Live scores, standings, stats and Savant-style analytics for every NBA season since 1946-47.',
+  openGraph: { siteName: 'NBA Savant', type: 'website' },
+  twitter: { card: 'summary_large_image' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
