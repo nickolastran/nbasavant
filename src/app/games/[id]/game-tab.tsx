@@ -334,8 +334,10 @@ function Now({ game, data }: { game: GameInfo; data: Live | null }) {
 }
 
 /** One row of a leaders card: away player and number on the left, home on the right. */
-function Duel({ label, away, home }: {
+function Duel({ label, away, home, dp = 0 }: {
   label: string;
+  /** Decimals: 0 for one game's box score, 1 for per-game averages. */
+  dp?: number;
   away: { playerId: number; name: string; value: number; line: string } | null;
   home: { playerId: number; name: string; value: number; line: string } | null;
 }) {
@@ -351,7 +353,7 @@ function Duel({ label, away, home }: {
             {p.line}
           </span>
         </div>
-        <span className="tnum text-xl font-bold">{fmt(p.value, Number.isInteger(p.value) ? 0 : 1)}</span>
+        <span className="tnum text-xl font-bold">{fmt(p.value, dp)}</span>
       </div>
     ) : (
       <span style={muted}>—</span>
@@ -424,7 +426,7 @@ function TeamLeaders({ game, season, players }: { game: GameInfo; season: Season
           ['Assists', (p: PlayerRow) => p.apg],
         ] as const
       ).map(([label, get]) => (
-        <Duel key={label} label={`${label} / G`} away={best(game.away, get)} home={best(game.home, get)} />
+        <Duel key={label} label={`${label} / G`} dp={1} away={best(game.away, get)} home={best(game.home, get)} />
       ))}
     </Card>
   );
