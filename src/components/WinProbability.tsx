@@ -19,9 +19,7 @@ export type RotationTeam = { id: number; abbr: string; color: string };
 const W = 320;
 const H = 140;
 // The left margin holds the rotation's player names; both charts share it so their time axes line up.
-const PAD = { top: 8, bottom: 18, left: 48, right: 6 };
-const ROW = 8;
-const HEAD = 12;
+const PAD = { top: 8, bottom: 18, left: 72, right: 6 };
 
 /**
  * The home team's win chance through the game: one line, 50% dashed across the
@@ -56,7 +54,7 @@ export function WinProbability({
   const shown = hover ?? last;
   const leader = shown.p >= 0.5 ? home : away;
 
-  const move = (e: React.PointerEvent<SVGSVGElement>) => {
+  const move = (e: React.PointerEvent<Element>) => {
     const box = e.currentTarget.getBoundingClientRect();
     const t = (((e.clientX - box.left) / box.width) * W - PAD.left) / (W - PAD.left - PAD.right) * length;
     // The last point at or before the pointer: the probability as it stood then.
@@ -165,6 +163,14 @@ function clockAt(t: number, start = false) {
 
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
+/** Hover handlers shared by both charts, so one pointer drives both. */
+type Pointer = { onPointerMove: (e: React.PointerEvent<Element>) => void; onPointerLeave: () => void };
+
+/**
+ * HTML rather than SVG: in the narrow sidebar a scaled SVG shrank the names to
+ * ~6px. Positions are percentages of the same W-wide frame as the chart above,
+ * so the clocks still line up, and the pointer maths there works unchanged.
+ */
 function Rotations({
   rows, x, quarters, hover, pointer,
 }: {
@@ -172,62 +178,60 @@ function Rotations({
   x: (t: number) => number;
   quarters: number[];
   hover: number | null;
-  pointer: Pick<React.SVGProps<SVGSVGElement>, 'onPointerMove' | 'onPointerLeave'>;
+  pointer: Pointer;
 }) {
-  const height = rows.reduce((h, t) => h + HEAD + t.rows.length * ROW, 0);
-  let top = 0;
+  // Across the whole frame, name column included.
+  const at = (t: number) => `${(x(t) / W) * 100}%`;
+  // Inside the bar track, which spans PAD.left..W-PAD.right.
+  const inTrack = (t: number) => ((x(t) - PAD.left) / (W - PAD.left - PAD.right)) * 100;
+  const names = { width: `${(PAD.left / W) * 100}%` };
   return (
     <div className="mt-3 border-t pt-2" style={{ borderColor: 'var(--line)' }}>
       <div className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.12em]">Rotations</div>
-      <svg viewBox={`0 0 ${W} ${height}`} className="w-full touch-none" role="img" aria-label="Each player's time on the floor" {...pointer}>
+      <div className="relative touch-none" role="img" aria-label="Each player's time on the floor" {...pointer}>
         {quarters.map((t) => (
-          <line key={t} x1={x(t)} x2={x(t)} y1={0} y2={height} stroke="var(--line)" />
+          <span key={t} className="absolute inset-y-0 w-px" style={{ left: at(t), background: 'var(--line)' }} />
         ))}
-        {rows.map(({ team, rows: players }) => {
-          const y0 = top;
-          top += HEAD + players.length * ROW;
-          return (
-            <g key={team.id}>
-              <text x={PAD.left - 4} y={y0 + 9} textAnchor="end" fontSize="8" fontWeight="700" fill="var(--ink)">
-                {team.abbr}
-              </text>
-              {players.map((r, i) => {
-                const y = y0 + HEAD + i * ROW;
-                const on = hover !== null && r.spells.some((s) => s.from <= hover && hover < s.to);
-                return (
-                  <g key={r.id}>
-                    <text
-                      x={PAD.left - 4}
-                      y={y + 5.5}
-                      textAnchor="end"
-                      fontSize="6.5"
-                      fill={on ? 'var(--ink)' : 'var(--ink-2)'}
-                      fontWeight={on ? 700 : 400}
-                    >
-                      {r.name.length > 12 ? `${r.name.slice(0, 11)}…` : r.name}
-                    </text>
+        {rows.map(({ team, rows: players }) => (
+          <div key={team.id}>
+            <div className="pr-1 text-right text-[0.6875rem] font-bold leading-5" style={names}>
+              {team.abbr}
+            </div>
+            {players.map((r) => {
+              const on = hover !== null && r.spells.some((s) => s.from <= hover && hover < s.to);
+              return (
+                <div key={r.id} className="flex h-3.5 items-center">
+                  <span
+                    className="shrink-0 truncate pr-1 text-right text-[0.625rem] leading-none"
+                    style={{ ...names, color: on ? 'var(--ink)' : 'var(--ink-2)', fontWeight: on ? 700 : 400 }}
+                    title={r.name}
+                  >
+                    {r.name}
+                  </span>
+                  <span className="relative h-2.5 flex-1" style={{ marginRight: `${(PAD.right / W) * 100}%` }}>
                     {r.spells.map((s) => (
-                      <rect
+                      <span
                         key={s.from}
-                        x={x(s.from)}
-                        y={y + 1}
-                        width={Math.max(0.5, x(s.to) - x(s.from))}
-                        height={ROW - 2}
-                        rx={1}
-                        fill={team.color}
-                        opacity={hover === null || on ? 0.9 : 0.35}
-                      >
-                        <title>{`${r.name}: ${clockAt(s.from, true)} to ${clockAt(s.to)}, ${signed(s.diff)}`}</title>
-                      </rect>
+                        className="absolute inset-y-0 rounded-[1px]"
+                        style={{
+                          left: `${inTrack(s.from)}%`,
+                          width: `max(1px, ${inTrack(s.to) - inTrack(s.from)}%)`,
+                          background: team.color,
+                          opacity: hover === null || on ? 0.9 : 0.35,
+                        }}
+                        title={`${r.name}: ${clockAt(s.from, true)} to ${clockAt(s.to)}, ${signed(s.diff)}`}
+                      />
                     ))}
-                  </g>
-                );
-              })}
-            </g>
-          );
-        })}
-        {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={0} y2={height} stroke="var(--ink-3)" />}
-      </svg>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        {hover !== null && (
+          <span className="pointer-events-none absolute inset-y-0 z-10 w-px" style={{ left: at(hover), background: 'var(--ink-3)' }} />
+        )}
+      </div>
       <p className="mt-1 text-[0.6875rem]" style={{ color: 'var(--ink-3)' }}>
         Every spell on the floor; hover a bar for its plus-minus.
       </p>
