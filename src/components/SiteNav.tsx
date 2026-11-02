@@ -37,6 +37,7 @@ export function SiteNav() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const cube = useRef<HTMLDivElement>(null);
+  const row = useRef<HTMLElement>(null);
 
   // A menu that outlives a click elsewhere on the page is a bug, not a feature.
   useEffect(() => {
@@ -53,21 +54,27 @@ export function SiteNav() {
     };
   }, [open]);
 
-  // Route changes close it too — Next keeps this component mounted across them.
-  useEffect(() => setOpen(false), [path]);
+  // Route changes close it too — Next keeps this component mounted across them —
+  // and on a phone bring the current tab into the scrolled row.
+  useEffect(() => {
+    setOpen(false);
+    row.current?.querySelector('[aria-current=page]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [path]);
 
   const current = (href: string) =>
     path === href || path.startsWith(`${href}/`) ? 'page' : undefined;
 
   return (
-    <div className="border-b" style={{ background: 'var(--chrome-2)', borderColor: 'var(--line)' }}>
-      <div className="flex items-center gap-3 px-4 py-2">
+    <div className="border-b" style={{ background: 'var(--chrome)', borderColor: 'var(--line)' }}>
+      <div className="flex items-center gap-3 px-4">
         <nav
+          ref={row}
           aria-label="Sections"
-          className="no-scrollbar flex flex-1 gap-1.5 overflow-x-auto"
+          // The fade says "more this way" where the row is cut off on a phone.
+          className="no-scrollbar -ml-3 flex flex-1 overflow-x-auto pr-8 [mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)]"
         >
           {TABS.map((t) => (
-            <Link key={t.href} href={t.href} className="tab" aria-current={current(t.href)}>
+            <Link key={t.href} href={t.href} className="nav-tab" aria-current={current(t.href)}>
               {t.label}
             </Link>
           ))}
