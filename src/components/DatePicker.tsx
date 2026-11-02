@@ -46,14 +46,18 @@ export function DatePicker({ value, onChange }: { value: string; onChange: (iso:
       <button
         ref={btn}
         popoverTarget={id}
-        className="flex items-center gap-1.5 rounded border px-2.5 py-1 transition-colors hover:bg-[var(--panel-2)]"
+        className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded border px-2.5 py-1 transition-colors hover:bg-[var(--panel-2)]"
         style={{ borderColor: 'var(--line-2)', background: 'var(--panel)' }}
         aria-label={`Pick a date, showing ${value ? longDate(value) : 'none'}`}
       >
         <span aria-hidden className="text-[0.75rem]" style={{ color: 'var(--ink-3)' }}>
           ▦
         </span>
-        <span className="tnum text-[0.6875rem] font-semibold tracking-[0.06em]">{value ? longDate(value) : '—'}</span>
+        <span className="tnum text-[0.6875rem] font-semibold tracking-[0.06em]">
+          {/* Phones drop the ", 2026" to keep the row on one line. */}
+          {value ? longDate(value).slice(0, -6) : '—'}
+          {value && <span className="hidden sm:inline">{longDate(value).slice(-6)}</span>}
+        </span>
       </button>
 
       <div

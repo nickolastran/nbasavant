@@ -48,14 +48,14 @@ export function PercentileBars({
       {rows.length ? (
         <>
           <div
-            className="mb-1 mt-3 grid grid-cols-[6.5rem_1fr_3.75rem] gap-3 text-[0.625rem] uppercase tracking-[0.08em]"
+            className="mb-1 mt-3 grid grid-cols-[6.5rem_minmax(0,1fr)_3.75rem] gap-3 text-[0.625rem] uppercase tracking-[0.08em]"
             style={{ color: 'var(--ink-3)' }}
             aria-hidden
           >
             <span />
             <span className="flex justify-between">
               <span>Poor</span>
-              <span>Average</span>
+              <span className="max-[359px]:hidden">Average</span>
               <span>Great</span>
             </span>
             <span className="text-right">Value</span>
@@ -66,7 +66,7 @@ export function PercentileBars({
               return (
                 <li
                   key={r.label}
-                  className="grid grid-cols-[6.5rem_1fr_3.75rem] items-center gap-3"
+                  className="grid grid-cols-[6.5rem_minmax(0,1fr)_3.75rem] items-center gap-3"
                   title={r.title}
                   aria-label={`${r.label}: ${r.value}, ${ordinal(r.pct)} percentile`}
                 >

@@ -273,7 +273,7 @@ function Bar() {
     <div className="border-b" style={{ background: 'var(--surface)', borderColor: 'var(--line)' }}>
       <div className="px-4 py-3">
         <div className="mb-2 flex items-center gap-3">
-          <span className="eyebrow">Scoreboard</span>
+          <span className="eyebrow max-[359px]:hidden">Scoreboard</span>
 
           <DatePicker value={date} onChange={(d) => load(`date=${d}`)} />
 

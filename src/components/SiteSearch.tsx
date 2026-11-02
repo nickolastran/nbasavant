@@ -124,7 +124,7 @@ export function SiteSearch() {
         role="combobox"
         aria-expanded={open}
         aria-controls="site-search-results"
-        className="w-44 pr-7 sm:w-60"
+        className="w-36 pr-7 min-[360px]:w-44 sm:w-60"
       />
       {q && (
         <button
