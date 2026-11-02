@@ -17,15 +17,6 @@ export const revalidate = 60;
 const STANDARD: Stat[] = ['ppg', 'rpg', 'apg', 'spg', 'bpg', 'tpm', 'fgPct', 'fg3Pct', 'ftPct'];
 const ADVANCED: Stat[] = ['tsPct', 'efgPct', 'usgPct', 'per', 'bpm', 'ws', 'vorp'];
 
-/** The middle column's index of the site, beyond the four tools at the bottom. */
-const MODULES = [
-  { href: '/scores', title: 'Scores', body: 'Live line scores, box scores, play-by-play and win probability.' },
-  { href: '/leaders', title: 'Stat leaders', body: 'Box score and advanced boards for any season, qualified the league’s way.' },
-  { href: '/standings', title: 'Standings', body: 'Conference, division and NBA Cup tables, updated after every final.' },
-  { href: '/team-stats', title: 'Team stats', body: 'Offensive, defensive and net rating for all thirty teams, per 100 possessions.' },
-  { href: '/injuries', title: 'Injury report', body: "Who's out, who's questionable, and why, from the league's own report." },
-];
-
 /** Streams: the skeleton paints at once and the page fills in when its queries land. */
 export default function Home() {
   return (
@@ -77,7 +68,13 @@ async function HomeContent() {
               take: 4,
               include: {
                 player: { select: { fullName: true } },
-                team: { select: { abbreviation: true, primaryColor: true } },
+                team: { select: { abbreviation: true, primaryColor: true, city: true, name: true } },
+                game: {
+                  select: {
+                    homeTeamId: true, homeScore: true, awayScore: true,
+                    homeTeam: { select: { abbreviation: true } }, awayTeam: { select: { abbreviation: true } },
+                  },
+                },
               },
             })
           : [],
@@ -133,31 +130,10 @@ async function HomeContent() {
             NBA&apos;s own feeds and basketball-reference. The boards on either side change every visit.
           </p>
 
-          <ol className="panel mt-5 divide-y" style={{ borderColor: 'var(--line)' }}>
-            {MODULES.map((m, i) => (
-              <li key={m.href}>
-                <Link
-                  href={m.href}
-                  className="flex items-start gap-3 px-4 py-3 no-underline transition-colors hover:bg-[var(--panel-2)]"
-                  style={{ color: 'var(--ink)' }}
-                >
-                  <span className="eyebrow tnum w-5 pt-0.5">{String(i + 1).padStart(2, '0')}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold">{m.title}</span>
-                    <span className="mt-0.5 block text-xs" style={{ color: 'var(--ink-2)' }}>
-                      {m.body}
-                    </span>
-                  </span>
-                  <span aria-hidden className="pt-0.5 text-sm" style={{ color: 'var(--accent)' }}>
-                    →
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ol>
+          {best[0] && <NightsBest line={best[0]} />}
 
           <p className="eyebrow mt-6">League averages</p>
-          <div className="mt-2 grid grid-cols-1 grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {tiles.map((t) => (
               <div key={t.label} className="panel px-3 py-2.5">
                 <div className="eyebrow">{t.label}</div>
@@ -166,14 +142,11 @@ async function HomeContent() {
             ))}
           </div>
 
-          {best.length > 0 && (
+          {best.length > 1 && (
             <>
-              <p className="eyebrow mt-6">
-                Best games ·{' '}
-                {best[0].date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
-              </p>
+              <p className="eyebrow mt-6">Also that night</p>
               <ol className="panel mt-2 divide-y" style={{ borderColor: 'var(--line)' }}>
-                {best.map((l) => (
+                {best.slice(1).map((l) => (
                   <li key={l.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                     <TeamMark abbr={l.team.abbreviation} color={l.team.primaryColor} size={18} />
                     <Headshot id={l.playerId} name="" className="h-6 w-6 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top" />
@@ -355,10 +328,15 @@ function HomeSkeleton() {
           <Bone width="60%" className="h-8" />
           <Bone width="95%" className="mt-2" />
           <Bone width="80%" />
-          <div className="panel mt-5 divide-y" style={{ borderColor: 'var(--line)' }}>
-            {rows(5, 'py-5')}
+          {/* Performance of the night */}
+          <div className="panel mt-5 space-y-3 px-4 py-4">
+            <Bone width="12rem" className="h-2.5" />
+            <Bone width="10rem" className="h-6" />
+            <Bone width="7rem" className="h-3" />
+            <Bone width="14rem" className="mt-2 h-12" />
+            <Bone width="100%" className="mt-2 h-4" />
           </div>
-          <div className="grid grid-cols-1 grid-cols-2 gap-2 pt-6 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 pt-6 sm:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="panel space-y-2 px-3 py-3">
                 <Bone width="3rem" className="h-2" />
@@ -367,7 +345,7 @@ function HomeSkeleton() {
             ))}
           </div>
           <div className="panel mt-6 divide-y" style={{ borderColor: 'var(--line)' }}>
-            {rows(4)}
+            {rows(3)}
           </div>
         </div>
         <RailSkeleton className="xl:order-1" />
@@ -403,5 +381,73 @@ function HomeSkeleton() {
         ))}
       </section>
     </div>
+  );
+}
+
+type NightLine = {
+  playerId: number; gameId: number; teamId: number; date: Date;
+  pts: number; reb: number; ast: number; fgm: number; fga: number; fg3m: number; min: number;
+  player: { fullName: string };
+  team: { abbreviation: string; primaryColor: string; city: string; name: string };
+  game: { homeTeamId: number; homeScore: number; awayScore: number; homeTeam: { abbreviation: string }; awayTeam: { abbreviation: string } };
+};
+
+/** The latest night's top scorer, front and centre: the one line worth a click today. */
+function NightsBest({ line: l }: { line: NightLine }) {
+  const g = l.game;
+  const home = l.teamId === g.homeTeamId;
+  const [us, them] = home ? [g.homeScore, g.awayScore] : [g.awayScore, g.homeScore];
+  const stats = [
+    ['Reb', l.reb],
+    ['Ast', l.ast],
+    ['FG', `${l.fgm}-${l.fga}`],
+    ...(l.fg3m ? [['3PM', l.fg3m]] : []),
+  ] as [string, string | number][];
+  return (
+    <article className="panel relative mt-5 overflow-hidden">
+      <div className="h-1" style={{ background: l.team.primaryColor }} />
+      <div className="flex items-end gap-4 px-4 pt-3">
+        <div className="min-w-0 flex-1 pb-3">
+          <p className="eyebrow">
+            Performance of the night ·{' '}
+            {l.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+          </p>
+          <Link href={`/players/${l.playerId}`} className="mt-1 block truncate text-xl font-bold no-underline hover:underline" style={{ color: 'var(--ink)' }}>
+            {l.player.fullName}
+          </Link>
+          <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--ink-2)' }}>
+            <TeamMark abbr={l.team.abbreviation} color={l.team.primaryColor} size={14} />
+            {l.team.city} {l.team.name}
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
+            <div>
+              <div className="tnum display text-5xl font-bold leading-none">{l.pts}</div>
+              <div className="eyebrow mt-1">Points</div>
+            </div>
+            {stats.map(([k, v]) => (
+              <div key={k}>
+                <div className="tnum display text-2xl font-bold leading-none">{v}</div>
+                <div className="eyebrow mt-1">{k}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <Headshot
+          id={l.playerId}
+          name={l.player.fullName}
+          className="hidden h-[120px] w-[165px] shrink-0 self-end object-contain object-bottom sm:block"
+        />
+      </div>
+      <Link
+        href={`/games/${l.gameId}`}
+        className="tnum flex items-center justify-between border-t px-4 py-2 text-xs no-underline transition-colors hover:bg-[var(--panel-2)]"
+        style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
+      >
+        <span>
+          <strong style={{ color: 'var(--ink)' }}>{us > them ? 'W' : 'L'} {us}-{them}</strong> · {g.awayTeam.abbreviation} @ {g.homeTeam.abbreviation}
+        </span>
+        <span style={{ color: 'var(--accent)' }}>Box score →</span>
+      </Link>
+    </article>
   );
 }
