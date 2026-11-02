@@ -100,7 +100,7 @@ function Header({
         </div>
         <div className={`${right ? 'mr-auto' : 'ml-auto'} text-center`}>
           <div
-            className="tnum text-3xl font-bold sm:text-4xl"
+            className="tnum display text-4xl font-bold sm:text-5xl"
             style={{ color: side.score === null || won(side.score, other.score) || !final ? 'var(--ink)' : 'var(--ink-3)' }}
           >
             {side.score ?? '—'}

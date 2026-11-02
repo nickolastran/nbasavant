@@ -233,7 +233,7 @@ export default async function TeamPage({
                 <div className="eyebrow">{l.label}</div>
                 {l.top ? (
                   <>
-                    <div className="tnum mt-1 text-2xl font-bold">{fmt(l.top[l.key])}</div>
+                    <div className="tnum display mt-1 text-3xl font-bold">{fmt(l.top[l.key])}</div>
                     <Link href={`/players/${l.top.playerId}`} className="link text-sm">
                       {l.top.name}
                     </Link>

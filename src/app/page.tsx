@@ -161,7 +161,7 @@ async function HomeContent() {
             {tiles.map((t) => (
               <div key={t.label} className="panel px-3 py-2.5">
                 <div className="eyebrow">{t.label}</div>
-                <div className="tnum mt-1 text-2xl font-bold tracking-tight">{t.value}</div>
+                <div className="tnum display mt-1 text-3xl font-bold">{t.value}</div>
               </div>
             ))}
           </div>

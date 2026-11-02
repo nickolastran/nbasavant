@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Archivo, Archivo_Narrow } from 'next/font/google';
 import Link from 'next/link';
 import './globals.css';
 import { SiteSearch } from '@/components/SiteSearch';
@@ -15,9 +16,13 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image' },
 };
 
+// Archivo for text; its Narrow cut for big numbers (scores, stat tiles), set by `.display`.
+const archivo = Archivo({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const narrow = Archivo_Narrow({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${archivo.variable} ${narrow.variable}`}>
       <body className="flex min-h-screen flex-col">
         <a
           href="#main"

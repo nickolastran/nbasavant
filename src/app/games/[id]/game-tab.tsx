@@ -353,7 +353,7 @@ function Duel({ label, away, home, dp = 0 }: {
             {p.line}
           </span>
         </div>
-        <span className="tnum text-xl font-bold">{fmt(p.value, dp)}</span>
+        <span className="tnum display text-2xl font-bold">{fmt(p.value, dp)}</span>
       </div>
     ) : (
       <span style={muted}>—</span>

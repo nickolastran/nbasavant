@@ -415,7 +415,7 @@ export default async function PlayerPage({
                   <dt className="eyebrow">
                     {label} <span className="normal-case tracking-normal">{season?.key}</span>
                   </dt>
-                  <dd className="tnum text-xl font-bold">{value}</dd>
+                  <dd className="tnum display text-2xl font-bold">{value}</dd>
                 </div>
               ))}
             </dl>
