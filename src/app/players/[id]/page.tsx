@@ -22,7 +22,7 @@ export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const player = await prisma.player.findUnique({ where: { id: Number((await params).id) || 0 } });
-  return { title: player?.fullName ?? 'Player' };
+  return { title: player?.fullName ?? 'Not found' };
 }
 
 const STAT_VIEWS = [

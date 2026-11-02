@@ -18,7 +18,7 @@ export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: Promise<{ abbr: string }> }) {
   const team = await prisma.team.findUnique({ where: { abbreviation: (await params).abbr.toUpperCase() } });
-  return { title: team ? `${team.city} ${team.name}` : 'Team' };
+  return { title: team ? `${team.city} ${team.name}` : 'Not found' };
 }
 
 const LEADERS = [

@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     where: { id: Number((await params).id) || 0 },
     include: { homeTeam: true, awayTeam: true },
   });
-  return { title: game ? `${game.awayTeam.abbreviation} at ${game.homeTeam.abbreviation}` : 'Game' };
+  return { title: game ? `${game.awayTeam.abbreviation} at ${game.homeTeam.abbreviation}` : 'Not found' };
 }
 
 type GameRow = NonNullable<Awaited<ReturnType<typeof loadGame>>>;
