@@ -110,7 +110,7 @@ export default async function GameFeedPage({ searchParams }: { searchParams: Pro
         <FeedDate date={date} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {boards.map((b) => (
           <LeaderBoard key={b.key} board={b} />
         ))}

@@ -225,7 +225,7 @@ async function playerCompare(sp: Record<string, string>, seasonKey: string | und
           />
         )}
 
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {cards.map((c, i) => (
             <ShotChart
               key={c.id}
@@ -344,7 +344,7 @@ async function teamCompare(sp: Record<string, string>, seasonKey: string | undef
           <section>
             <h2 className="mb-2 text-sm font-semibold">Meetings, {seasonKey}</h2>
             {meetings.length ? (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {meetings.map((g) => (
                   <Link key={g.id} href={`/games/${g.id}`} className="panel p-2.5 text-sm no-underline hover:bg-[var(--panel-2)]" style={{ color: 'var(--ink)' }}>
                     <div className="eyebrow mb-1">

@@ -106,7 +106,7 @@ export function TeamBox({
         <TeamMark abbr={team.abbreviation} color={team.primaryColor} size={22} />
         {team.city} {team.name}
       </h2>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         {/* Fixed column widths, so both teams' tables line up whatever the names and numbers. */}
         <table className="tnum w-full min-w-[52rem] table-fixed border-collapse text-[0.8125rem]">
           {/* The player column is set; the 14 stat columns split what's left evenly. */}

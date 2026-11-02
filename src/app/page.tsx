@@ -124,7 +124,7 @@ async function HomeContent() {
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
+      <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="md:col-span-2 xl:order-2 xl:col-span-1">
           <p className="eyebrow">{season.key} season</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight">Every game, every shot, every number.</h1>
@@ -157,7 +157,7 @@ async function HomeContent() {
           </ol>
 
           <p className="eyebrow mt-6">League averages</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-2 grid grid-cols-1 grid-cols-2 gap-2 sm:grid-cols-4">
             {tiles.map((t) => (
               <div key={t.label} className="panel px-3 py-2.5">
                 <div className="eyebrow">{t.label}</div>
@@ -195,7 +195,7 @@ async function HomeContent() {
         <LeaderRail heading={`${season.key} advanced`} boards={rail(ADVANCED)} className="xl:order-3" />
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Where the {season.key} league shoots</h2>
           <p className="mt-1 max-w-prose text-sm" style={{ color: 'var(--ink-2)' }}>
@@ -281,7 +281,7 @@ async function HomeContent() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { href: '/explorer', title: 'Stat Explorer', body: 'Sort and filter every player-season, then export it.' },
           { href: '/shots', title: 'Shot Chart Analyzer', body: 'Filter shots by shooter, team, zone and result.' },
@@ -348,7 +348,7 @@ function HomeSkeleton() {
   return (
     <div className="space-y-8" role="status" aria-live="polite">
       <span className="sr-only">Loading…</span>
-      <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
+      <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="space-y-3 md:col-span-2 xl:order-2 xl:col-span-1">
           <Bone width="6rem" className="h-2.5" />
           <Bone width="85%" className="h-8" />
@@ -358,7 +358,7 @@ function HomeSkeleton() {
           <div className="panel mt-5 divide-y" style={{ borderColor: 'var(--line)' }}>
             {rows(5, 'py-5')}
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-6 sm:grid-cols-4">
+          <div className="grid grid-cols-1 grid-cols-2 gap-2 pt-6 sm:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="panel space-y-2 px-3 py-3">
                 <Bone width="3rem" className="h-2" />
@@ -374,7 +374,7 @@ function HomeSkeleton() {
         <RailSkeleton className="xl:order-3" />
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
         <div className="space-y-2">
           <Bone width="18rem" className="h-6" />
           <Bone width="90%" />
@@ -394,7 +394,7 @@ function HomeSkeleton() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="panel space-y-2 p-4">
             <Bone width="7rem" />

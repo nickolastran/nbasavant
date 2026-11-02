@@ -83,7 +83,7 @@ export async function GameTab({ game, data, standings }: { game: GameInfo; data:
   const position = new Map(roster.map((p) => [p.id, broad(p.position)]));
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)_19rem]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[19rem_minmax(0,1fr)_19rem]">
       <div className="space-y-4">
         {data && data.state !== 'pre' && <OnCourt game={game} data={data} position={position} />}
         {data && data.state !== 'pre' && <WinChance game={game} data={data} />}

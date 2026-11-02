@@ -128,7 +128,7 @@ export default async function PlayoffsPage({ searchParams }: { searchParams: Pro
       {playIn.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-lg font-bold tracking-tight">Play-In Tournament</h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {playIn.map((g) => {
               const [away, home] = [teams.get(g.awayTeamId), teams.get(g.homeTeamId)];
               const final = g.status.startsWith('Final');

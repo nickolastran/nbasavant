@@ -73,7 +73,7 @@ export default async function LeadersPage({
       <ViewTabs views={VIEWS} current={view} params={Object.fromEntries(Object.entries(sp).filter(([k]) => k !== 'view'))} />
 
       {view === 'players' ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {boards.map((b) => (
             <section key={b.key} className="panel overflow-hidden">
               <h2

@@ -14,7 +14,7 @@ import type { LiveLeader } from '@/lib/live';
 export function LiveCards({ games, date }: { games: Game[]; date: string }) {
   const shown = useLive(games, date);
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       {shown.map((g) => (
         <ScoreCard key={g.id} g={g} />
       ))}

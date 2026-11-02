@@ -163,7 +163,7 @@ export function GamePlays({
         <h2 className="mb-3 border-b pb-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em]" style={{ borderColor: 'var(--line)' }}>
           Shot chart <span className="font-normal normal-case tracking-normal" style={{ color: 'var(--ink-3)' }}>· {shots.length} shots</span>
         </h2>
-        <div className="grid items-center gap-4 md:grid-cols-[auto_minmax(0,1fr)_auto]">
+        <div className="grid grid-cols-1 items-center gap-4 md:grid-cols-[auto_minmax(0,1fr)_auto]">
           {legend(away)}
           <FullCourt
             shots={shots}

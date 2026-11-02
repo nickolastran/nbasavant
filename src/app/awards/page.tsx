@@ -113,7 +113,7 @@ export default async function AwardsPage({ searchParams }: { searchParams: Promi
           fields={[{ kind: 'select', name: 'season', label: 'Season', options: seasonOptions(seasons), defaultValue: season?.key }]}
         />
       </Suspense>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {boards.map((b) => (
           <LeaderBoard key={b.key} board={b} />
         ))}

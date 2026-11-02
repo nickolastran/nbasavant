@@ -440,7 +440,7 @@ export default async function PlayerPage({
       )}
 
       {tracker.length > 0 && (
-        <section className="grid gap-5 lg:grid-cols-3">
+        <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           <div>
             <h2 className="mb-2 text-sm font-semibold">On pace for, {season!.key}</h2>
             <dl className="panel flex flex-wrap gap-x-6 gap-y-3 p-4">
@@ -494,7 +494,7 @@ export default async function PlayerPage({
         </section>
       )}
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <PercentileBars
           title={`Percentile rankings, ${season?.key ?? ''}`}
           subtitle={`Against the ${qualified.length} players with 70% of their team's games. Red beats the field, blue trails it.`}
@@ -525,7 +525,7 @@ export default async function PlayerPage({
       </section>
 
       {onOff.length > 0 && (
-        <section className="grid gap-5 lg:grid-cols-2">
+        <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <div>
             <h2 className="mb-2 text-sm font-semibold">On/off, {season?.key}</h2>
             <div className="panel overflow-x-auto">
@@ -760,7 +760,7 @@ export default async function PlayerPage({
         </section>
       )}
 
-      <section className="grid gap-5 lg:grid-cols-2">
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <TrendChart
           title="Scoring and efficiency by season"
           data={rows.map((r) => ({ label: r.season, ppg: r.ppg, tsPct: r.tsPct }))}

@@ -227,7 +227,7 @@ export default async function TeamPage({
           )}
         </h2>
         {lines.length ? (
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-7">
             {leaders.map((l) => (
               <div key={l.key} className="panel p-3">
                 <div className="eyebrow">{l.label}</div>
@@ -253,7 +253,7 @@ export default async function TeamPage({
         )}
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <PercentileBars
           title={`How they rank, ${prev?.key ?? season.key}`}
           subtitle={
@@ -361,7 +361,7 @@ export default async function TeamPage({
         </section>
       )}
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <div>
           <h2 className="mb-2 text-lg font-bold tracking-tight">Schedule and results</h2>
           <div className="panel max-h-[34rem] overflow-auto">

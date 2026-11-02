@@ -53,7 +53,7 @@ export async function Preview({ game }: { game: GameInfo }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {[away, home].map((t) => (
           <PercentileBars
             key={t.id}
@@ -68,7 +68,7 @@ export async function Preview({ game }: { game: GameInfo }) {
           />
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <HeadToHead away={away} home={home} meetings={meetings} />
         <Card title="Recent form">
           <div className="space-y-3">
@@ -78,13 +78,13 @@ export async function Preview({ game }: { game: GameInfo }) {
         </Card>
       </div>
       <Card title="Players vs. opponent" action={<span className="text-[0.6875rem] font-normal normal-case tracking-normal" style={muted}>Regular season, per game, since 1996-97</span>}>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Versus team={away} opp={home} rows={awayVs} />
           <Versus team={home} opp={away} rows={homeVs} />
         </div>
       </Card>
       <Card title={`Best lineups, ${game.seasonKey}`} action={<span className="text-[0.6875rem] font-normal normal-case tracking-normal" style={muted}>By net rating once a unit has {LINEUP_FLOOR}+ minutes</span>}>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Lineups team={away} units={awayUnits} />
           <Lineups team={home} units={homeUnits} />
         </div>

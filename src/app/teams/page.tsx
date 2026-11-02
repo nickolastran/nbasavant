@@ -28,7 +28,7 @@ export default async function TeamsPage() {
         season it has played.
       </p>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {byConf.map((c) => (
           <section key={c.conference}>
             <h2 className="eyebrow mb-2">{c.conference}ern Conference</h2>

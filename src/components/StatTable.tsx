@@ -138,7 +138,7 @@ export function StatTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      <div className={`panel overflow-auto ${tall ? '' : 'max-h-[70vh]'}`}>
+      <div className={`panel relative overflow-auto ${tall ? '' : 'max-h-[70vh]'}`}>
         <table className="stat-table">
           <thead>
             <tr>
