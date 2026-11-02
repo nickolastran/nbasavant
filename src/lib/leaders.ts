@@ -4,7 +4,7 @@
  */
 import { prisma } from './db';
 import { perGame } from './format';
-import { expectedShooting, minGames, scaledFloor, stintRatings } from './stats';
+import { attemptFloor, expectedShooting, minGames, scaledFloor, stintRatings } from './stats';
 
 export type Line = {
   playerId: number; name: string; abbr: string; color: string; teamId: number | null; gp: number; gs: number | null;
@@ -22,7 +22,7 @@ export type Stat = Exclude<keyof Line, 'playerId' | 'name' | 'abbr' | 'color' | 
 /**
  * Each board, and what it takes to be on it. Per-game and rate boards need
  * 70% of the player's team's games; rate boards also an attempt floor (the 82-game number,
- * prorated); usage, PER and BPM a minutes floor (1000, about 12 a game), so a
+ * prorated, but at least a fifth of it: see attemptFloor); usage, PER and BPM a minutes floor (1000, about 12 a game), so a
  * two-minute cameo can't top them. Season totals (WS, VORP) rank everyone.
  */
 export const BOARDS: { key: Stat; label: string; unit?: string; dp?: number; total?: boolean; floor?: ['min' | 'fga' | 'fg3a' | 'fta', number] }[] = [
@@ -206,7 +206,7 @@ export async function leaderBoards(seasonId: number | undefined, n = 10, minGpOv
       lines.filter(
         (l) =>
           (b.total || l.gp >= (minGpOverride || minGames(games(l)))) &&
-          (!b.floor || (l[b.floor[0]] ?? 0) >= scaledFloor(b.floor[1], games(l))),
+          (!b.floor || (l[b.floor[0]] ?? 0) >= (b.floor[0] === 'min' ? scaledFloor : attemptFloor)(b.floor[1], games(l))),
       ),
       b.key,
     ).slice(0, n),

@@ -658,6 +658,13 @@ export const minGames = (teamGames: number) => Math.ceil((teamGames * 7) / 10);
 /** An 82-game attempt floor, prorated to the games played so far. */
 export const scaledFloor = (floor: number, teamGames: number) => Math.ceil((floor * teamGames) / 82);
 
+/**
+ * An attempt floor for a leader board: prorated, but never under a fifth of
+ * the full-season number (20 FTA, 60 FGA), so a hot first week on a dozen
+ * shots can't top it. From about game 17 the prorated floor is the larger.
+ */
+export const attemptFloor = (floor: number, teamGames: number) => Math.max(scaledFloor(floor, teamGames), Math.ceil(floor / 5));
+
 /** Share of the field below `value`, 0-100. Same definition the tables shade by. */
 export function percentileOf(value: number, field: number[], lowerIsBetter = false) {
   if (field.length < 2) return 50;

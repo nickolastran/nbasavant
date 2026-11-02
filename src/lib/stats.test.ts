@@ -4,7 +4,7 @@ import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
-  careerAdvanced, careerTotals, expectedShooting, MIN_TYPE_ATTEMPTS, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
+  attemptFloor, careerAdvanced, careerTotals, expectedShooting, MIN_TYPE_ATTEMPTS, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
   activeStreak, nextMilestone, onPace, splitLogs,
 } from './stats';
 import { ordinal, shortNames } from './format';
@@ -368,6 +368,9 @@ assert.equal(minGames(0), 0, 'before opening night nobody needs games');
 assert.equal(scaledFloor(300, 82), 300, 'a full season keeps the whole attempt floor');
 assert.equal(scaledFloor(300, 41), 150, 'half a season, half the floor');
 assert.equal(scaledFloor(100, 60), 74, 'a 60-game BAA season scales down and rounds up');
+assert.equal(attemptFloor(100, 6), 20, 'six games in, a fifth of the full floor, not 8');
+assert.equal(attemptFloor(300, 41), 150, 'by midseason the prorated floor takes over');
+assert.equal(attemptFloor(300, 0), 60, 'opening night still asks for a fifth');
 
 // --- Percentiles --------------------------------------------------------------
 const pop = [10, 20, 30, 40, 50];
