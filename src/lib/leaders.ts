@@ -118,36 +118,49 @@ const add = (a: Totals, b: Totals): Totals => ({
 const minus = (a: Totals, b: Totals): Totals => add(a, { seconds: -b.seconds, pts: -b.pts, oppPts: -b.oppPts, poss: -b.poss, oppPoss: -b.oppPoss });
 const none: Totals = { seconds: 0, pts: 0, oppPts: 0, poss: 0, oppPoss: 0 };
 
+type StintRow = Totals & { teamId: number; players: number[]; clutch: boolean };
+
 /**
- * Shot quality and shot-making, on/off net rating and clutch totals for a
- * season, by player. On/off sums his teams' stints rather than filtering them
- * per player: off the floor is his team's totals minus his on-court ones.
+ * Each player's team ratings with him on the floor and off it. Off the floor
+ * is his team's totals minus his on-court ones, summed over every team he
+ * played for, rather than filtering the stints once per player.
  */
-async function playByPlay(seasonId: number) {
-  const [shooting, clutch, stints] = await Promise.all([
-    seasonShooting(seasonId),
-    prisma.clutchLog.groupBy({ by: ['playerId'], where: { seasonId }, _sum: { pts: true } }),
-    prisma.stint.findMany({ where: { seasonId }, select: { teamId: true, players: true, seconds: true, pts: true, oppPts: true, poss: true, oppPoss: true, clutch: true } }),
-  ]);
+export function onOffOf(stints: StintRow[]) {
   const team = new Map<number, Totals>();
   const on = new Map<number, Map<number, Totals>>();
-  const clutchPm = new Map<number, number>();
   for (const s of stints) {
     team.set(s.teamId, add(team.get(s.teamId) ?? none, s));
     for (const id of s.players) {
       const mine = on.get(id) ?? new Map<number, Totals>();
       mine.set(s.teamId, add(mine.get(s.teamId) ?? none, s));
       on.set(id, mine);
-      if (s.clutch) clutchPm.set(id, (clutchPm.get(id) ?? 0) + s.pts - s.oppPts);
     }
   }
-  const onOff = new Map<number, number | null>();
+  const out = new Map<number, { on: ReturnType<typeof stintRatings>; off: ReturnType<typeof stintRatings> }>();
   for (const [id, byTeam] of on) {
     const onT = [...byTeam.values()].reduce(add, none);
     const offT = [...byTeam].reduce((a, [t, mine]) => add(a, minus(team.get(t)!, mine)), none);
-    const [r1, r2] = [stintRatings([onT]), stintRatings([offT])];
-    onOff.set(id, r1.net === null || r2.net === null ? null : r1.net - r2.net);
+    out.set(id, { on: stintRatings([onT]), off: stintRatings([offT]) });
   }
+  return out;
+}
+
+export const seasonStints = (seasonId: number) =>
+  prisma.stint.findMany({ where: { seasonId }, select: { teamId: true, players: true, seconds: true, pts: true, oppPts: true, poss: true, oppPoss: true, clutch: true } });
+
+/** Shot quality and shot-making, on/off net rating and clutch totals for a season, by player. */
+async function playByPlay(seasonId: number) {
+  const [shooting, clutch, stints] = await Promise.all([
+    seasonShooting(seasonId),
+    prisma.clutchLog.groupBy({ by: ['playerId'], where: { seasonId }, _sum: { pts: true } }),
+    seasonStints(seasonId),
+  ]);
+  const clutchPm = new Map<number, number>();
+  for (const s of stints) {
+    if (s.clutch) for (const id of s.players) clutchPm.set(id, (clutchPm.get(id) ?? 0) + s.pts - s.oppPts);
+  }
+  const onOff = new Map<number, number | null>();
+  for (const [id, r] of onOffOf(stints)) onOff.set(id, r.on.net === null || r.off.net === null ? null : r.on.net - r.off.net);
   return {
     shooting, onOff, clutchPm,
     clutchPts: new Map(clutch.map((c) => [c.playerId, c._sum.pts ?? 0])),
