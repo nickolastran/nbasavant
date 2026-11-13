@@ -541,5 +541,7 @@ export async function runSync(db: PrismaClient) {
   await step('rosters', () => syncRosters(db));
   await step('transactions', () => syncTransactions(db));
   await step('seasonTotals', () => syncSeasonTotals(db));
+  // The stamp the site shows as "Updated ...". A failed write mustn't fail the sync.
+  await db.syncRun.create({ data: { report } }).catch(() => {});
   return report;
 }

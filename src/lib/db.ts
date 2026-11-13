@@ -92,3 +92,16 @@ export type Standing = Awaited<ReturnType<typeof seasonStandings>>[number];
 /** Best record first; ties go to the better point differential. */
 export const byRecord = (a: Standing, b: Standing) =>
   b.pct - a.pct || b.wins - a.wins || b.pf - b.pa - (a.pf - a.pa);
+
+/** "11/13, 4:02 AM PT": when the daily sync last finished, or null before the first one (or with the database down). */
+export async function lastUpdated() {
+  try {
+    const run = await prisma.syncRun.findFirst({ orderBy: { at: 'desc' }, select: { at: true } });
+    if (!run) return null;
+    const t = run.at.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return `${t} PT`;
+  } catch {
+    // No table yet (migration not applied) or no database: the stamp is simply left out.
+    return null;
+  }
+}
