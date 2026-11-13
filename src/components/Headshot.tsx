@@ -10,10 +10,13 @@ export function Headshot({
   id,
   name,
   className = 'h-[95px] w-[130px] shrink-0 self-end object-contain object-bottom',
+  priority,
 }: {
   id: number;
   name: string;
   className?: string;
+  /** The page's main image: fetch it first instead of lazily. */
+  priority?: boolean;
 }) {
   const [ok, setOk] = useState(true);
   if (!ok) return null;
@@ -25,6 +28,8 @@ export function Headshot({
       width={130}
       height={95}
       referrerPolicy="no-referrer"
+      loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : undefined}
       onError={() => setOk(false)}
       // An image that failed before hydration never fires onError for React; catch it on mount.
       ref={(img) => {
