@@ -24,7 +24,7 @@ export function TeamMark({
       src={`/logos/${abbr}.svg`}
       alt=""
       {...box}
-      className="shrink-0 object-contain"
+      className="team-mark shrink-0 object-contain"
       style={box}
       onError={() => setBroken(true)}
       // A logo that failed before hydration never fires onError for React; catch it on mount.
