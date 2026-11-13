@@ -4,6 +4,7 @@ import { byRecord, getSeason, latestSeason, prisma, seasonStandings, type Standi
 import { FilterBar } from '@/components/FilterBar';
 import { ViewTabs } from '@/components/ViewTabs';
 import { seasonOptions } from '@/lib/options';
+import { titleZoneData } from '@/lib/title-zone-data';
 import { colsFor } from './columns';
 import { StandingsTables } from './StandingsTables';
 
@@ -49,7 +50,13 @@ export default async function StandingsPage({
   const cup = sp.tab === 'cup';
   const type = !cup && sp.type === 'preseason' ? 'preseason' : 'regular';
   const view = VIEWS.some((v) => v.value === sp.view) ? sp.view : 'conference';
-  const rows = season ? (await seasonStandings(season.id, cup ? 'cup' : type)).sort(byRecord) : [];
+  const standings = season ? (await seasonStandings(season.id, cup ? 'cup' : type)).sort(byRecord) : [];
+  // Each team's net rating by game day (the Title Zone's series), for the trend sparkline. Regular season only.
+  const zone = season && !cup && type === 'regular' ? await titleZoneData(season.id) : null;
+  const trendOf = new Map<number, number[]>();
+  // The first few game days are one-game samples (plus or minus forty); the line starts once they settle.
+  for (const f of (zone?.frames ?? []).slice(3)) for (const [id, off, def] of f.season) trendOf.set(id, [...(trendOf.get(id) ?? []), Math.round((off + def) * 10) / 10]);
+  const rows = standings.map((r) => ({ ...r, trend: trendOf.get(r.teamId)?.slice(-20) }));
 
   // Before 1970-71 there were no conferences: the divisions were the halves.
   const hasConferences = rows.some((r) => r.conference);

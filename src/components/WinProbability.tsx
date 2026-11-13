@@ -100,7 +100,8 @@ export function WinProbability({
             {q}
           </text>
         ))}
-        <path d={path} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" />
+        {/* Drawn in once, left to right, when the chart first appears. */}
+        <path d={path} pathLength={1} className="draw-in" fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" />
         {hover && (
           <>
             <line x1={x(hover.t)} x2={x(hover.t)} y1={PAD.top} y2={H - PAD.bottom} stroke="var(--ink-3)" />

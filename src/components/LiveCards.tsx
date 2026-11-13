@@ -91,10 +91,10 @@ function ScoreCard({ g }: { g: Game }) {
   const head = (
     <div className="flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.08em]">
       {state === 'live' && (
-        <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: 'var(--hot)' }} />
+        <span aria-hidden className="live-dot" />
       )}
       <span style={{ color: state === 'live' ? 'var(--hot)' : final ? 'var(--ink-2)' : 'var(--accent)' }}>
-        {state === 'live' && <span className="sr-only">Live: </span>}
+        {state === 'live' && <span className="mr-1 font-bold uppercase tracking-[0.08em]">Live</span>}
         <Tip day={g.date} status={g.status} />
       </span>
       {tag && (

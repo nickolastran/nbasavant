@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Headshot } from '@/components/Headshot';
 import { TeamMark } from '@/components/TeamMark';
 import { Tip } from '@/components/Tip';
+import { ScoreWorm } from '@/components/ScoreWorm';
 import { WinProbability, type WinPoint } from '@/components/WinProbability';
 import { prisma, type Standing } from '@/lib/db';
 import { normName } from '@/lib/identity';
@@ -194,6 +195,15 @@ function WinChance({ game, data }: { game: GameInfo; data: Live }) {
         teams={[side(game.away), side(game.home)]}
         now={data.state === 'live' ? points.at(-1)!.t : length}
       />
+      <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--line)' }}>
+        <div className="eyebrow mb-1">Score margin</div>
+        <ScoreWorm
+          points={points}
+          length={length}
+          home={{ abbr: game.home.abbreviation, color: game.home.primaryColor }}
+          away={{ abbr: game.away.abbreviation, color: game.away.primaryColor }}
+        />
+      </div>
     </Card>
   );
 }

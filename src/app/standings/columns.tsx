@@ -1,3 +1,4 @@
+import { Sparkline } from '@/components/Sparkline';
 import type { Standing } from '@/lib/db';
 import { fmt, pct3 } from '@/lib/format';
 import { gamesBehind } from '@/lib/stats';
@@ -76,6 +77,22 @@ export const RATING_COLS: Col[] = [
   {
     h: 'NET', tip: 'Net rating: points per 100 possessions, scored minus allowed',
     cell: (r) => (r.netRtg === null ? '—' : tone(r.netRtg, signed(r.netRtg))), rank: (r) => r.netRtg,
+  },
+  {
+    h: 'TREND', tip: 'Net rating after each game day this season; the dashed line is zero',
+    cell: (r) => {
+      const trend = (r as Standing & { trend?: number[] }).trend;
+      return trend && trend.length > 1 ? (
+        <span className="inline-flex align-middle">
+          <Sparkline values={trend} width={52} height={18} zero={0} label="Net rating by game day" />
+        </span>
+      ) : '—';
+    },
+    // Sorts by how far the rating has moved from where it started.
+    rank: (r) => {
+      const trend = (r as Standing & { trend?: number[] }).trend;
+      return trend && trend.length > 1 ? trend[trend.length - 1] - trend[0] : null;
+    },
   },
 ];
 export const CUP_COLS: Col[] = [
