@@ -7,6 +7,8 @@ import { FavoriteStar } from '@/components/Favorites';
 import { Headshot } from '@/components/Headshot';
 import { PercentileBars, type Percentile } from '@/components/PercentileBars';
 import { ShotChart, type Shot } from '@/components/ShotChart';
+import { AdvancedTable } from '@/components/AdvancedTable';
+import { LazyMount } from '@/components/LazyMount';
 import { StatTable, type Col } from '@/components/StatTable';
 import { TrendChart } from '@/components/TrendChart';
 import { ViewTabs } from '@/components/ViewTabs';
@@ -100,7 +102,7 @@ export default async function PlayerPage({
 
   const [field, teamGp, shots, logs, moves, allLogs] = await Promise.all([
     season
-      ? prisma.playerStats.findMany({ where: { seasonId: season.id }, include: { player: { select: { advancedStats: { where: { seasonId: season.id } } } } } })
+      ? prisma.playerStats.findMany({ where: { seasonId: season.id }, include: { player: { select: { position: true, advancedStats: { where: { seasonId: season.id } } } } } })
       : [],
     season
       ? prisma.teamStats.findMany({ where: { seasonId: season.id }, select: { teamId: true, gp: true } })
@@ -194,44 +196,46 @@ export default async function PlayerPage({
   const gpOf = new Map(teamGp.map((t) => [t.teamId, t.gp]));
   const teamGames = Math.max(0, ...teamGp.map((t) => t.gp));
   const gamesOf = (f: { teamId: number | null }) => gpOf.get(f.teamId ?? -1) ?? teamGames;
-  const qualified = field.filter((f) => f.gp >= minGames(gamesOf(f)));
-  type Metric = { label: string; unit?: string; dp?: number; low?: boolean; signed?: boolean; title?: string; get: (f: (typeof field)[number]) => Cell; floor?: (f: (typeof field)[number]) => boolean };
+  // `?vs=pos` ranks him against his own position only.
+  const vsPos = sp.vs === 'pos' && !!player.position;
+  const qualified = field.filter((f) => f.gp >= minGames(gamesOf(f)) && (!vsPos || f.player.position === player.position));
+  type Metric = { group: string; label: string; unit?: string; dp?: number; low?: boolean; signed?: boolean; title?: string; get: (f: (typeof field)[number]) => Cell; floor?: (f: (typeof field)[number]) => boolean };
   const a = (f: (typeof field)[number]) => f.player.advancedStats[0];
   const METRICS: Metric[] = [
-    { label: 'Points', get: (f) => f.ppg },
-    { label: 'Rebounds', get: (f) => f.rpg },
-    { label: 'Assists', get: (f) => f.apg },
-    { label: 'Steals', get: (f) => perGame(f.stl, f.gp) },
-    { label: 'Blocks', get: (f) => perGame(f.blk, f.gp) },
-    { label: 'Turnovers', low: true, get: (f) => perGame(f.tov, f.gp) },
-    { label: 'True shooting', unit: '%', get: (f) => f.tsPct, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)) },
+    { group: 'Scoring', label: 'Points', get: (f) => f.ppg },
+    { group: 'Rebounding', label: 'Rebounds', get: (f) => f.rpg },
+    { group: 'Playmaking', label: 'Assists', get: (f) => f.apg },
+    { group: 'Defense', label: 'Steals', get: (f) => perGame(f.stl, f.gp) },
+    { group: 'Defense', label: 'Blocks', get: (f) => perGame(f.blk, f.gp) },
+    { group: 'Playmaking', label: 'Turnovers', low: true, get: (f) => perGame(f.tov, f.gp) },
+    { group: 'Scoring', label: 'True shooting', unit: '%', get: (f) => f.tsPct, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)) },
     {
-      label: 'Shot quality', unit: '%', get: (f) => xShot.get(f.playerId)?.xEfg ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
+      group: 'Scoring', label: 'Shot quality', unit: '%', get: (f) => xShot.get(f.playerId)?.xEfg ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
       title: 'Expected eFG%: what the league makes on his shots, by spot and shot type',
     },
     {
-      label: 'Shot-making', signed: true, get: (f) => xShot.get(f.playerId)?.shotMaking ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
+      group: 'Scoring', label: 'Shot-making', signed: true, get: (f) => xShot.get(f.playerId)?.shotMaking ?? null, floor: (f) => f.fga >= scaledFloor(300, gamesOf(f)),
       title: 'eFG% minus expected eFG%, in points: zero is an average shooter on his shots',
     },
     {
-      label: 'Opp. shooting', signed: true, low: true, get: (f) => defense.get(f.playerId)?.diff ?? null,
+      group: 'Defense', label: 'Opp. shooting', signed: true, low: true, get: (f) => defense.get(f.playerId)?.diff ?? null,
       floor: (f) => (defense.get(f.playerId)?.oppFga ?? 0) >= scaledFloor(2000, gamesOf(f)),
       title: "Opponents' eFG% minus what their shots deserved, with him on the floor: below zero is good defense",
     },
     {
-      label: 'Rim FG% allowed', unit: '%', low: true, get: (f) => defense.get(f.playerId)?.rimFg ?? null,
+      group: 'Defense', label: 'Rim FG% allowed', unit: '%', low: true, get: (f) => defense.get(f.playerId)?.rimFg ?? null,
       floor: (f) => (defense.get(f.playerId)?.rimFga ?? 0) >= scaledFloor(600, gamesOf(f)),
       title: 'What opponents shot in the restricted area with him on the floor',
     },
-    { label: 'Three-point %', unit: '%', get: (f) => f.fg3Pct, floor: (f) => (f.fg3a ?? 0) >= scaledFloor(100, gamesOf(f)) },
-    { label: 'Free throw %', unit: '%', get: (f) => f.ftPct, floor: (f) => f.fta >= scaledFloor(100, gamesOf(f)) },
-    { label: 'Usage', unit: '%', get: (f) => f.usgPct },
-    { label: 'Assist %', unit: '%', get: (f) => a(f)?.astPct ?? null },
-    { label: 'Rebound %', unit: '%', get: (f) => a(f)?.rebPct ?? null },
-    { label: 'PER', get: (f) => a(f)?.per ?? null },
-    { label: 'Box +/-', get: (f) => a(f)?.bpm ?? null },
-    { label: 'WS/48', dp: 3, get: (f) => a(f)?.ws48 ?? null },
-    { label: 'VORP', get: (f) => a(f)?.vorp ?? null },
+    { group: 'Scoring', label: 'Three-point %', unit: '%', get: (f) => f.fg3Pct, floor: (f) => (f.fg3a ?? 0) >= scaledFloor(100, gamesOf(f)) },
+    { group: 'Scoring', label: 'Free throw %', unit: '%', get: (f) => f.ftPct, floor: (f) => f.fta >= scaledFloor(100, gamesOf(f)) },
+    { group: 'Scoring', label: 'Usage', unit: '%', get: (f) => f.usgPct },
+    { group: 'Playmaking', label: 'Assist %', unit: '%', get: (f) => a(f)?.astPct ?? null },
+    { group: 'Rebounding', label: 'Rebound %', unit: '%', get: (f) => a(f)?.rebPct ?? null },
+    { group: 'Impact', label: 'PER', get: (f) => a(f)?.per ?? null },
+    { group: 'Impact', label: 'Box +/-', get: (f) => a(f)?.bpm ?? null },
+    { group: 'Impact', label: 'WS/48', dp: 3, get: (f) => a(f)?.ws48 ?? null },
+    { group: 'Impact', label: 'VORP', get: (f) => a(f)?.vorp ?? null },
   ];
   const me = field.find((f) => f.playerId === id);
   const qualifyAt = me ? minGames(gamesOf(me)) : 0;
@@ -245,7 +249,7 @@ export default async function PlayerPage({
       const pct = percentileOf(mine, pool, m.low);
       const value = `${m.signed && mine > 0 ? '+' : ''}${fmt(mine, m.dp ?? 1, m.unit)}`;
       ranks.push({
-        label: m.label, value, pct,
+        group: m.group, label: m.label, value, pct,
         title: `${m.title ?? m.label}: ${value}, ${ordinal(pct)} percentile of ${pool.length} qualified players`,
       });
     }
@@ -383,7 +387,7 @@ export default async function PlayerPage({
       <header className="panel overflow-hidden">
         <div className="h-1.5" style={{ background: player.team?.primaryColor ?? 'var(--chrome)' }} />
         <div className="flex flex-wrap items-end gap-x-6 gap-y-4 px-4 pt-3">
-          {id < 2_000_000 && <Headshot id={id} name={player.fullName} />}
+          {id < 2_000_000 && <Headshot id={id} name={player.fullName} priority />}
           <div className="min-w-0 flex-1 pb-4">
             <div className="eyebrow">
               {[
@@ -497,7 +501,17 @@ export default async function PlayerPage({
       <section className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <PercentileBars
           title={`Percentile rankings, ${season?.key ?? ''}`}
-          subtitle={`Against the ${qualified.length} players with 70% of their team's games. Red beats the field, blue trails it.`}
+          subtitle={`Against the ${qualified.length} ${vsPos ? `${player.position}s` : 'players'} with 70% of their team's games. Red beats the field, blue trails it.`}
+          controls={
+            player.position ? (
+              <ViewTabs
+                name="vs"
+                current={vsPos ? 'pos' : 'all'}
+                views={[{ value: 'all', label: 'All players' }, { value: 'pos', label: `${player.position} only` }]}
+                params={Object.fromEntries(Object.entries(sp).filter(([k]) => k !== 'vs'))}
+              />
+            ) : undefined
+          }
           rows={ranks}
           empty={
             !line
@@ -506,6 +520,7 @@ export default async function PlayerPage({
           }
         />
         {shots.length ? (
+          <LazyMount className="aspect-[500/560]">
           <ShotChart
             shots={shots.map(
               (s): Shot => ({
@@ -517,6 +532,7 @@ export default async function PlayerPage({
             title={`${player.fullName}, ${season?.key}`}
             subtitle={shotNote}
           />
+          </LazyMount>
         ) : (
           <div className="panel grid place-items-center p-8 text-sm" style={{ color: 'var(--ink-3)' }}>
             {shotNote}
@@ -760,6 +776,7 @@ export default async function PlayerPage({
         </section>
       )}
 
+      <LazyMount className="h-80">
       <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <TrendChart
           title="Scoring and efficiency by season"
@@ -778,17 +795,19 @@ export default async function PlayerPage({
           ]}
         />
       </section>
+      </LazyMount>
 
       <section>
         <h2 className="mb-2 text-lg font-bold tracking-tight">Game log, {season?.key}</h2>
-        <StatTable
-          empty="Game logs go back to 1996-97, from the NBA's stats."
-          rows={logRows}
-          cols={
-            [
-              { key: 'date', label: 'Date' },
-              { key: 'matchup', label: 'Matchup' },
-              { key: 'result', label: 'Result' },
+        <Suspense>
+          <LazyMount className="h-96">
+          <AdvancedTable
+            empty="No game log for this season. Logs start in 2026-27."
+            rows={logRows}
+            lead={{ key: 'date', label: 'Date', hrefBase: '/games', idKey: 'gameId' }}
+            cols={[
+              { key: 'matchup', label: 'Matchup', kind: 'text' },
+              { key: 'result', label: 'Result', kind: 'text' },
               { key: 'min', label: 'MIN', dp: 1 },
               { key: 'pts', label: 'PTS', shade: true },
               { key: 'reb', label: 'REB', shade: true },
@@ -796,17 +815,16 @@ export default async function PlayerPage({
               { key: 'stl', label: 'STL' },
               { key: 'blk', label: 'BLK' },
               { key: 'tov', label: 'TOV', lowerIsBetter: true, shade: true },
-              { key: 'fg', label: 'FG' },
-              { key: 'fg3', label: '3P' },
-              { key: 'ft', label: 'FT' },
-              { key: 'plusMinus', label: '+/-', shade: true },
-            ] as Col<(typeof logRows)[number]>[]
-          }
-          initialSort="date"
-          href={{ base: '/games', key: 'gameId' }}
-          filename={`${player.fullName}-gamelog-${season?.key}`}
-          pageSize={25}
-        />
+              { key: 'fg', label: 'FG', kind: 'text' },
+              { key: 'fg3', label: '3P', kind: 'text' },
+              { key: 'ft', label: 'FT', kind: 'text' },
+              { key: 'plusMinus', label: '+/-', signed: true, shade: true },
+            ]}
+            initialSort="date"
+            filename={`${player.fullName}-gamelog-${season?.key}`}
+          />
+          </LazyMount>
+        </Suspense>
       </section>
 
       {vsRows.length > 0 && (
@@ -817,6 +835,7 @@ export default async function PlayerPage({
               Regular season, per game. Game logs go back to 1996-97.
             </span>
           </div>
+          <LazyMount className="h-96">
           <StatTable
             rows={vsRows}
             cols={
@@ -843,6 +862,7 @@ export default async function PlayerPage({
             filename={`${player.fullName}-vs-opponents`}
             pageSize={30}
           />
+          </LazyMount>
         </section>
       )}
 

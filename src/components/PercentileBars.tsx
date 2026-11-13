@@ -11,6 +11,8 @@ import { ordinal } from '@/lib/format';
  * These steps all do: white on the poles, ink on everything lighter.
  */
 export type Percentile = {
+  /** Category heading the row sits under (Scoring, Defense...). Rows keep their order within a group. */
+  group?: string;
   label: string;
   /** The stat itself, already formatted: "27.4", "61.2%". */
   value: string;
@@ -29,11 +31,13 @@ function step(p: number) {
 }
 
 export function PercentileBars({
-  title, subtitle, rows, empty,
+  title, subtitle, rows, empty, controls,
 }: {
   title: string;
   subtitle?: string;
   rows: Percentile[];
+  /** A toggle shown under the subtitle (all players or one position). */
+  controls?: React.ReactNode;
   /** Why there are no rows (didn't qualify, nothing tracked that season). */
   empty?: string;
 }) {
@@ -45,6 +49,7 @@ export function PercentileBars({
           {subtitle}
         </p>
       )}
+      {controls && <div className="mt-3 [&>*]:mb-0">{controls}</div>}
       {rows.length ? (
         <>
           <div
@@ -60,37 +65,46 @@ export function PercentileBars({
             </span>
             <span className="text-right">Value</span>
           </div>
-          <ul className="space-y-2.5">
-            {rows.map((r) => {
-              const s = step(r.pct);
-              return (
-                <li
-                  key={r.label}
-                  className="grid grid-cols-[6.5rem_minmax(0,1fr)_3.75rem] items-center gap-3"
-                  title={r.title}
-                  aria-label={`${r.label}: ${r.value}, ${ordinal(r.pct)} percentile`}
-                >
-                  <span className="truncate text-xs font-semibold">{r.label}</span>
-                  <span className="relative h-1.5 rounded-full" style={{ background: 'var(--line)' }}>
-                    <span
-                      className="absolute inset-y-0 left-0 rounded-full"
-                      style={{ width: `${r.pct}%`, background: s.fill }}
-                    />
-                    <span
-                      className="tnum absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[0.625rem] font-bold"
-                      // The 2px ring in the surface color keeps the dot legible over the track.
-                      style={{ left: `${r.pct}%`, background: s.fill, color: s.text, boxShadow: '0 0 0 2px var(--panel)' }}
+          {[...new Set(rows.map((r) => r.group ?? ''))].map((g) => (
+            <div key={g} role="group" aria-label={g || undefined}>
+              {g && (
+                <h3 className="eyebrow mb-2 mt-4 border-b pb-1" style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}>
+                  {g}
+                </h3>
+              )}
+              <ul className="space-y-2.5">
+                {rows.filter((r) => (r.group ?? '') === g).map((r) => {
+                  const s = step(r.pct);
+                  return (
+                    <li
+                      key={r.label}
+                      className="grid grid-cols-[6.5rem_minmax(0,1fr)_3.75rem] items-center gap-3"
+                      title={r.title}
+                      aria-label={`${r.label}: ${r.value}, ${ordinal(r.pct)} percentile`}
                     >
-                      {r.pct}
-                    </span>
-                  </span>
-                  <span className="tnum text-right text-xs" style={{ color: 'var(--ink-2)' }}>
-                    {r.value}
-                  </span>
-                </li>
-              );
-            })}
+                      <span className="truncate text-xs font-semibold">{r.label}</span>
+                      <span className="relative h-1.5 rounded-full" style={{ background: 'var(--line)' }}>
+                        <span
+                          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-slow ease-out"
+                          style={{ width: `${r.pct}%`, background: s.fill }}
+                        />
+                        <span
+                          className="tnum absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[0.625rem] font-bold transition-[left] duration-slow ease-out"
+                          // The 2px ring in the surface color keeps the dot legible over the track.
+                          style={{ left: `${r.pct}%`, background: s.fill, color: s.text, boxShadow: '0 0 0 2px var(--panel)' }}
+                        >
+                          {r.pct}
+                        </span>
+                      </span>
+                      <span className="tnum text-right text-xs" style={{ color: 'var(--ink-2)' }}>
+                        {r.value}
+                      </span>
+                    </li>
+                  );
+                })}
           </ul>
+            </div>
+          ))}
         </>
       ) : (
         <p className="mt-3 text-sm" style={{ color: 'var(--ink-3)' }}>
