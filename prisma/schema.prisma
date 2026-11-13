@@ -513,6 +513,25 @@ model Stint {
   /// Last five minutes of the fourth or overtime, the score within five.
   clutch  Boolean
 
+  /// What the four factors are built from, for the team and its opponent over the stint.
+  /// Zero on stints saved before these were tracked; `npm run stints` re-reads those games.
+  fgm     Int @default(0)
+  fga     Int @default(0)
+  fg3m    Int @default(0)
+  ftm     Int @default(0)
+  fta     Int @default(0)
+  tov     Int @default(0)
+  oreb    Int @default(0)
+  dreb    Int @default(0)
+  oppFgm  Int @default(0)
+  oppFga  Int @default(0)
+  oppFg3m Int @default(0)
+  oppFtm  Int @default(0)
+  oppFta  Int @default(0)
+  oppTov  Int @default(0)
+  oppOreb Int @default(0)
+  oppDreb Int @default(0)
+
   @@index([seasonId, teamId])
   @@index([gameId])
   @@map("stints")
@@ -546,4 +565,15 @@ model ClutchLog {
   @@unique([playerId, gameId])
   @@index([seasonId, playerId])
   @@map("clutch_logs")
+}
+
+/// One run of the daily sync: when it finished and what each step reported.
+/// The newest row is the "Updated ..." stamp the site shows.
+model SyncRun {
+  id     Int      @id @default(autoincrement())
+  at     DateTime @default(now())
+  report Json
+
+  @@index([at(sort: Desc)])
+  @@map("sync_runs")
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { COURT, CourtLines } from './Court';
-import { downloadSvgAsPng } from '@/lib/export';
+import { ShareMenu } from '@/components/ShareMenu';
 
 export type Shot = {
   x: number; y: number; made: boolean; value: number; distanceFt: number;
@@ -118,14 +118,7 @@ export function ShotChart({
               {m === 'hex' ? 'Heat map' : 'Every shot'}
             </button>
           ))}
-          <button
-            onClick={() => svgRef.current && downloadSvgAsPng(svgRef.current, 'shot-chart')}
-            className="rounded px-2 py-1 text-xs font-medium"
-            style={{ border: '1px solid var(--line)', color: 'var(--ink-2)' }}
-            title="Download this chart as a PNG"
-          >
-            PNG
-          </button>
+          <ShareMenu svg={() => svgRef.current} title={title ?? 'Shot chart'} subtitle={subtitle} filename="shot-chart" />
         </div>
       </figcaption>
 
