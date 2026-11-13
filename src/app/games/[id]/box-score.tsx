@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PlayerLink } from '@/components/PlayerLink';
 import { Headshot } from '@/components/Headshot';
 import { TeamMark } from '@/components/TeamMark';
 
@@ -57,9 +58,9 @@ function Player({ id, name, jersey, on }: { id: number; name: string; jersey: st
         />
         {on && <span className="sr-only">On the court: </span>}
         <Headshot id={id} name="" className="h-6 w-6 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top" />
-        <Link href={`/players/${id}`} className="link font-medium">
+        <PlayerLink id={id} className="link font-medium">
           {name}
-        </Link>
+        </PlayerLink>
         {jersey && <span style={{ color: 'var(--ink-3)' }}>#{jersey}</span>}
       </span>
     </td>

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Headshot } from '@/components/Headshot';
+import { PlayerLink } from '@/components/PlayerLink';
 import { TeamMark } from '@/components/TeamMark';
 import { downloadCsv, downloadJson } from '@/lib/export';
 
@@ -116,7 +117,11 @@ export function StatTable<T extends Record<string, any>>({
 
   const visible = sorted.slice(0, shown);
   const lead = (row: T, text: string) =>
-    href ? (
+    href?.base === '/players' ? (
+      <PlayerLink id={row[href.key]} className="link font-medium">
+        {text}
+      </PlayerLink>
+    ) : href ? (
       <Link href={`${href.base}/${row[href.key]}`} className="link font-medium">
         {text}
       </Link>
