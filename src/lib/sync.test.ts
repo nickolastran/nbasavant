@@ -346,6 +346,29 @@ assert.ok(!isClutch(4, 301, 0) && !isClutch(3, 60, 0) && !isClutch(4, 60, 6), 'n
   }
   // MIL trailed 111-117 at 5:06; Jaquez's dunk at 4:56 made it four, and the clutch.
   assert.equal(Math.min(...stints.filter((s) => s.clutch).map((s) => s.start)), 48 * 60 - 296, 'clutch starts on the dunk');
+  // The four-factor counts must survive being cut into stints: summed back up they equal the
+  // game's own totals, counted straight off the play-by-play (the trimmed box fixture has no
+  // shooting lines), and each side's "opponent" counts are the other side's own.
+  const acts = fixture('playbyplay_0022600099.json').game.actions as any[];
+  const sumOf = (teamId: number, k: keyof (typeof stints)[number]) => stints.filter((s) => s.teamId === teamId).reduce((a, s) => a + (s[k] as number), 0);
+  for (const [t, o] of [[box.homeTeam, box.awayTeam], [box.awayTeam, box.homeTeam]]) {
+    const count = (test: (a: any) => boolean) => acts.filter((a) => a.teamId === t.teamId && test(a)).length;
+    const made = (a: any) => a.shotResult === 'Made';
+    assert.equal(sumOf(t.teamId, 'fga'), count((a) => a.isFieldGoal === 1), `${t.teamTricode} FGA`);
+    assert.equal(sumOf(t.teamId, 'fgm'), count((a) => a.isFieldGoal === 1 && made(a)), `${t.teamTricode} FGM`);
+    assert.equal(sumOf(t.teamId, 'fg3m'), count((a) => a.actionType === '3pt' && made(a)), `${t.teamTricode} 3PM`);
+    assert.equal(sumOf(t.teamId, 'fta'), count((a) => a.actionType === 'freethrow'), `${t.teamTricode} FTA`);
+    assert.equal(sumOf(t.teamId, 'ftm'), count((a) => a.actionType === 'freethrow' && made(a)), `${t.teamTricode} FTM`);
+    assert.equal(sumOf(t.teamId, 'oreb'), count((a) => a.actionType === 'rebound' && a.subType === 'offensive'), `${t.teamTricode} OREB`);
+    assert.equal(sumOf(t.teamId, 'dreb'), count((a) => a.actionType === 'rebound' && a.subType === 'defensive'), `${t.teamTricode} DREB`);
+    assert.equal(sumOf(t.teamId, 'tov'), count((a) => a.actionType === 'turnover'), `${t.teamTricode} TOV`);
+    // Points are the cross-check against the box score: twos, threes and free throws must rebuild the final.
+    assert.equal((sumOf(t.teamId, 'fgm') - sumOf(t.teamId, 'fg3m')) * 2 + sumOf(t.teamId, 'fg3m') * 3 + sumOf(t.teamId, 'ftm'), t.score, `${t.teamTricode} makes rebuild the score`);
+    for (const k of ['fga', 'fgm', 'fg3m', 'fta', 'ftm', 'oreb', 'dreb', 'tov'] as const) {
+      const oppKey = `opp${k[0].toUpperCase()}${k.slice(1)}` as keyof (typeof stints)[number];
+      assert.equal(sumOf(t.teamId, oppKey), sumOf(o.teamId, k), `${t.teamTricode} ${oppKey} mirrors ${o.teamTricode} ${k}`);
+    }
+  }
   // Herro from 4:56 on, read off the play-by-play: threes at 4:26 and 3:56, 1 of 2 on
   // the flagrant, misses at 3:48 (3), 3:08, 1:23 and 0:28.7 (3), a rebound, a
   // turnover. His floater at 0:05.8 came down seven, out of the clutch.

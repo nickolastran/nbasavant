@@ -246,15 +246,18 @@ export const isClutch = (period: number, left: number, margin: number) =>
 export type Stint = {
   teamId: number; players: number[]; period: number; start: number; seconds: number;
   pts: number; oppPts: number; poss: number; oppPoss: number; clutch: boolean;
-};
+} & Factors & { [K in keyof Factors as `opp${Capitalize<K>}`]: number };
+/** The counts the four factors are built from, for one side over one stint. */
+export type Factors = { fgm: number; fga: number; fg3m: number; ftm: number; fta: number; tov: number; oreb: number; dreb: number };
+const FACTORS = ['fgm', 'fga', 'fg3m', 'ftm', 'fta', 'tov', 'oreb', 'dreb'] as const;
 /** One player's box line in a game's clutch minutes. */
 export type ClutchLine = {
   playerId: number; teamId: number; pts: number; fgm: number; fga: number; fg3m: number; fg3a: number;
   ftm: number; fta: number; reb: number; ast: number; stl: number; blk: number; tov: number;
 };
 
-type Tally = { pts: number; fga: number; fta: number; oreb: number; tov: number };
-const zero = (): Tally => ({ pts: 0, fga: 0, fta: 0, oreb: 0, tov: 0 });
+type Tally = { pts: number } & Factors;
+const zero = (): Tally => ({ pts: 0, fgm: 0, fga: 0, fg3m: 0, ftm: 0, fta: 0, tov: 0, oreb: 0, dreb: 0 });
 
 /**
  * Every lineup stint and clutch line in a game. A stint ends at a substitution,
@@ -321,11 +324,17 @@ export function stintsFromPbp(pbp: any, box: any) {
       const poss = (t: number) => d(t, 'fga') + 0.44 * d(t, 'fta') - d(t, 'oreb') + d(t, 'tov');
       const players = [...lineup.get(team)!].sort((a, b) => a - b);
       // Mid-way through a batch of subs a lineup can be four or six for no time at all.
-      if (players.length === 5 && (at > o.start || d(team, 'pts') || d(opp(team), 'pts')))
+      // Free throws shot after a sub at the same clock reading can land in a stint of no length; keep it if anything was counted.
+      const counted = FACTORS.some((k) => d(team, k) || d(opp(team), k));
+      if (players.length === 5 && (at > o.start || d(team, 'pts') || d(opp(team), 'pts') || counted)) {
+        const mine = Object.fromEntries(FACTORS.map((k) => [k, d(team, k)])) as Factors;
+        const theirs = Object.fromEntries(FACTORS.map((k) => [`opp${k[0].toUpperCase()}${k.slice(1)}`, d(opp(team), k)]));
         stints.push({
           teamId: team, players, period: p, start: r1(o.start), seconds: r1(at - o.start),
           pts: d(team, 'pts'), oppPts: d(opp(team), 'pts'), poss: poss(team), oppPoss: poss(opp(team)), clutch: o.clutch,
-        });
+          ...mine, ...theirs,
+        } as Stint);
+      }
       begin(team, at);
     };
     begin(home, gameSeconds(p, periodLength(p)));
@@ -354,9 +363,19 @@ export function stintsFromPbp(pbp: any, box: any) {
       }
       const made = a.shotResult === 'Made';
       if (cum[team]) {
-        if (a.isFieldGoal === 1) cum[team].fga++;
-        if (a.actionType === 'freethrow') cum[team].fta++;
+        if (a.isFieldGoal === 1) {
+          cum[team].fga++;
+          if (made) {
+            cum[team].fgm++;
+            if (a.actionType === '3pt') cum[team].fg3m++;
+          }
+        }
+        if (a.actionType === 'freethrow') {
+          cum[team].fta++;
+          if (made) cum[team].ftm++;
+        }
         if (a.actionType === 'rebound' && a.subType === 'offensive') cum[team].oreb++;
+        if (a.actionType === 'rebound' && a.subType === 'defensive') cum[team].dreb++;
         if (a.actionType === 'turnover') cum[team].tov++;
       }
       if (inClutch && teamOf.has(a.personId)) {
