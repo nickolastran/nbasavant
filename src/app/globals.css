@@ -3,36 +3,162 @@
 @tailwind utilities;
 
 /*
- * Palette: newsprint. A cream page, white cards, hairline rules and one blue
- * that means "interactive" everywhere — links, tip-off times, the sign-in
- * button. The cold->hot pair is kept apart for charts: blue is below league
- * average, red is above. Validated for CVD.
+ * Design tokens. One system, two modes and two themes:
+ *   data-mode="general"  the ESPN side: neutral page, white cards, bold type
+ *   data-mode="savant"   the analytics side: warm paper, ink, monospace numbers
+ *   data-theme="dark"    either mode after dark
+ * Both attributes are set on <html> before first paint (see layout.tsx).
+ * One blue means "interactive" everywhere. The cold->hot pair is kept apart for
+ * charts: blue is below league average, red is above. Validated for CVD, and
+ * every chart also carries the number, a label or a shape.
  */
 :root {
-  --surface: #f2f1ec;
+  /* Surfaces and ink */
+  --surface: #f3f3f1;
   --panel: #ffffff;
-  --panel-2: #f7f6f2;
-  --line: #d9d6cd;
-  --line-2: #c3bfb4;
+  --panel-2: #f7f7f5;
+  --line: #dcdbd6;
+  --line-2: #c4c2bb;
   --ink: #16181c;
   --ink-2: #4d525a;
-  --ink-3: #8b8f96;
+  --ink-3: #646970;
   --chrome: #ffffff;
-  --chrome-2: #f2f1ec;
+  --chrome-2: #f3f3f1;
   --on-chrome: #16181c;
   --accent: #1450c8;
+  /* Text on a solid ink or accent fill. */
+  --on-ink: #ffffff;
+
+  /* Diverging percentile scale: poor -> average -> elite */
   --cold: #2f6fb2;
-  --hot: #c8102e;
-  /* Plus and minus numbers: a differential above or below zero. */
-  --pos: #1a7f3c;
-  --neg: #c8102e;
   --mid: #b9c0c8;
-  --hardwood: #c08a4a;
+  --hot: #c8102e;
+  --div-1: var(--cold);
+  --div-2: color-mix(in oklab, var(--cold) 55%, var(--mid));
+  --div-3: var(--mid);
+  --div-4: color-mix(in oklab, var(--hot) 55%, var(--mid));
+  --div-5: var(--hot);
+  /* Sequential: low -> high, light to dark */
+  --seq-1: #e8eef6;
+  --seq-2: #b7cbe4;
+  --seq-3: #7fa3cf;
+  --seq-4: #4a7ab5;
+  --seq-5: #1f4f8f;
+  /* Categorical series, in fixed order (Okabe-Ito hues, CVD-safe) */
   --s1: #2f6fb2;
   --s2: #c8102e;
   --s3: #7a5fc4;
   --s4: #c98a20;
-  --shadow: 0 1px 2px rgba(22, 24, 28, 0.06), 0 8px 24px rgba(22, 24, 28, 0.08);
+  --s5: #1a7f6b;
+  --s6: #6b6f76;
+  /* Plus and minus numbers: a differential above or below zero. */
+  --pos: #1a7f3c;
+  --neg: #c8102e;
+  --hardwood: #c08a4a;
+  /* Title Zone quadrant washes */
+  --zone-good: #dcefdc;
+  --zone-mixed: #fbe6cf;
+  --zone-bad: #f8dcdf;
+
+  /* Type scale (1.2 ratio from 13px body) */
+  --text-2xs: 0.625rem;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-3xl: 2.75rem;
+  --text-4xl: 3.75rem;
+  --font-num: inherit;
+
+  /* Spacing, 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  --elev-1: 0 1px 2px rgba(22, 24, 28, 0.06);
+  --elev-2: 0 1px 2px rgba(22, 24, 28, 0.06), 0 8px 24px rgba(22, 24, 28, 0.08);
+  --elev-3: 0 2px 4px rgba(22, 24, 28, 0.08), 0 20px 48px rgba(22, 24, 28, 0.18);
+  --shadow: var(--elev-2);
+
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 480ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.6, 0, 0.2, 1);
+}
+
+/* Savant: warm paper, slightly warmer rules, every number in the mono face. */
+[data-mode='savant'] {
+  --surface: #f6f1e7;
+  --panel: #fffdf8;
+  --panel-2: #f3ecde;
+  --line: #ddd5c3;
+  --line-2: #c5bba5;
+  --ink-3: #66625a;
+  --chrome: #f6f1e7;
+  --chrome-2: #ede6d6;
+  --font-num: var(--font-mono), ui-monospace, monospace;
+}
+
+[data-theme='dark'] {
+  --surface: #0e1013;
+  --panel: #171a1f;
+  --panel-2: #1e2228;
+  --line: #2b3038;
+  --line-2: #3c424d;
+  --ink: #eef0f3;
+  --ink-2: #b1b7c1;
+  --ink-3: #8a919d;
+  --chrome: #12151a;
+  --chrome-2: #1e2228;
+  --on-chrome: #eef0f3;
+  --accent: #7aa7ff;
+  --on-ink: #0e1013;
+  --mid: #4d5561;
+  --seq-1: #1c2a3d;
+  --seq-2: #27456b;
+  --seq-3: #3a6aa3;
+  --seq-4: #6b9bd1;
+  --seq-5: #b3cff0;
+  --s1: #6ba3dc;
+  --s2: #f0647a;
+  --s3: #a892e6;
+  --s4: #e0aa4a;
+  --s5: #4fbfa8;
+  --s6: #9aa0a9;
+  --pos: #46c277;
+  --neg: #f0647a;
+  --zone-good: #1c3324;
+  --zone-mixed: #3b2c18;
+  --zone-bad: #3d2025;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elev-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 20px 48px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme='dark'][data-mode='savant'] {
+  --surface: #14120e;
+  --panel: #1c1914;
+  --panel-2: #24201a;
+  --line: #342f26;
+  --line-2: #474033;
+  --ink: #f1ece1;
+  --ink-2: #bdb5a5;
+  --ink-3: #958d7d;
+  --chrome: #14120e;
+  --chrome-2: #24201a;
 }
 
 html {
@@ -40,10 +166,14 @@ html {
   /* Keep the scrollbar's lane on short pages too, so the layout doesn't jump sideways between pages. */
   scrollbar-gutter: stable;
 }
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
 
 body {
   background: var(--surface);
   color: var(--ink);
+  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -63,6 +193,7 @@ body {
 
 /* Every number on this site is a stat; keep columns from dancing. */
 .tnum {
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
 }
@@ -129,6 +260,9 @@ body {
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.stat-table tbody td:not(:first-child) {
+  font-family: var(--font-num);
 }
 .stat-table tbody tr:nth-child(even) {
   background: var(--panel-2);
@@ -213,19 +347,84 @@ select:focus {
   box-shadow: 0 0 0 1px var(--ink);
 }
 
-/* Loading placeholders: a soft pulse in the table's own greys. */
+/* Loading placeholders: a light band sweeping across the table's own greys. */
 .skeleton {
   display: block;
-  background: var(--line);
-  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  background: linear-gradient(100deg, var(--line) 40%, var(--panel-2) 50%, var(--line) 60%) 0 0 / 300% 100%;
+  animation: skeleton-shimmer 1.6s linear infinite;
 }
-@keyframes skeleton-pulse {
-  50% {
-    opacity: 0.45;
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* The live dot: it pulses, and always sits next to the word LIVE. */
+.live-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--hot);
+  animation: live-pulse 1.6s ease-out infinite;
+}
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--hot) 60%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0.5rem transparent;
+  }
+}
+
+/* Scroll reveal (see Reveal.tsx) and toasts. */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
+}
+.reveal.reveal-in {
+  opacity: 1;
+  transform: none;
+}
+.toast {
+  animation: toast-in var(--dur-base) var(--ease-out);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* The leaders ticker: one long row sliding left, paused under the pointer or keyboard focus. */
+.ticker {
+  display: flex;
+  width: max-content;
+  animation: ticker 60s linear infinite;
+}
+.ticker:hover,
+.ticker:focus-within {
+  animation-play-state: paused;
+}
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+  /* No motion: the ticker becomes a row you scroll yourself. */
+  .ticker {
+    animation: none;
+  }
   *,
   *::before,
   *::after {
@@ -234,19 +433,8 @@ select:focus {
   }
 }
 
-/* Recharts inherits none of the above by default. */
-.recharts-cartesian-axis-tick text,
-.recharts-legend-item-text {
-  fill: var(--ink-2) !important;
-  color: var(--ink-2) !important;
-  font-size: 11px;
-}
-.recharts-cartesian-grid line {
-  stroke: var(--line);
-}
-
-/* The section row under the wordmark: plain labels, the current one underlined
-   on the row's bottom rule (the inset shadow sits on it, so nothing shifts). */
+/* The section row under the wordmark: plain labels; the current one carries an
+   underline that slides between tabs (drawn in SiteHeader). */
 .nav-tab {
   display: inline-block;
   padding: 0.75rem 0.75rem 0.6875rem;
@@ -264,7 +452,6 @@ select:focus {
 }
 .nav-tab[aria-current='page'] {
   color: var(--ink);
-  box-shadow: inset 0 -2px 0 var(--ink);
 }
 
 /* Bordered, uppercase, letter-spaced buttons: view toggles and page actions.
@@ -291,7 +478,7 @@ select:focus {
 .tab[aria-current='page'] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 /* The postseason line in a standings table: below the last playoff seed and
@@ -304,4 +491,77 @@ select:focus {
 
 .stat-table tbody tr.cutline td {
   border-bottom: 2px solid var(--line-2);
+}
+
+/* Tailwind's divide-y draws in its own light gray; rules between rows follow the theme instead. */
+.divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--line);
+}
+
+/* AdvancedTable: a group row above the column row, and stripes by row index
+   (rows are virtual, so nth-child would flicker as they scroll). */
+.stat-table.adv thead th.group-th {
+  cursor: default;
+  text-align: center;
+  border-bottom: 0;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  color: var(--ink-3);
+}
+.stat-table.adv thead th.group-th-on {
+  color: var(--ink-2);
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.stat-table.adv tbody tr:nth-child(even),
+.stat-table.adv tbody tr:nth-child(even) td:first-child {
+  background: var(--panel);
+}
+.stat-table.adv tbody tr:nth-child(even) {
+  background: transparent;
+}
+.stat-table.adv tbody tr.alt,
+.stat-table.adv tbody tr.alt td:first-child {
+  background: var(--panel-2);
+}
+.stat-table.adv tbody tr:hover td:first-child {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+.stat-table.adv th[aria-sort] sup {
+  font-size: 0.6em;
+}
+
+/* A link inside a sentence is underlined, so it doesn't rely on color to be found. */
+p .link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Title Zone logos glide to their new spot when the day changes (no motion under reduced-motion, by the rule above). */
+.tz-node {
+  transition: transform 450ms var(--ease-out);
+}
+.tz-node:focus-visible {
+  outline: none;
+}
+.tz-node:focus-visible circle {
+  stroke: var(--accent);
+  stroke-width: 2.5px;
+}
+
+/* A line that draws itself in once (win probability, score margin). pathLength={1} on the path makes the dash math unitless. */
+.draw-in {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw-in 1.4s var(--ease-out) forwards;
+}
+@keyframes draw-in {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Several logos are black or navy (Spurs, Nets, Magic). On the dark theme a thin light halo keeps their shape readable. */
+[data-theme='dark'] .team-mark {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.5));
 }

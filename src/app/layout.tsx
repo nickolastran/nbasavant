@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import { Archivo, Archivo_Narrow } from 'next/font/google';
-import Link from 'next/link';
+import { Archivo, Archivo_Narrow, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
-import { SiteSearch } from '@/components/SiteSearch';
 import { ScoreboardBar } from '@/components/ScoreboardBar';
 import { SiteFooter } from '@/components/SiteFooter';
-import { SiteNav } from '@/components/SiteNav';
+import { Toaster } from '@/components/Toast';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SAVANT_PATHS } from '@/lib/nav';
 import { SITE_URL } from '@/lib/og';
 
 export const metadata: Metadata = {
@@ -19,10 +19,23 @@ export const metadata: Metadata = {
 // Archivo for text; its Narrow cut for big numbers (scores, stat tiles), set by `.display`.
 const archivo = Archivo({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 const narrow = Archivo_Narrow({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
+// The Savant side sets every number in a mono face (`--font-num`).
+const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '600'], variable: '--font-mono', display: 'swap' });
+
+/**
+ * Runs before first paint: the saved theme (or the system's) and the mode this
+ * route belongs to go on <html>, so the page never flashes the wrong palette.
+ */
+const PRE_PAINT = `(function(){try{var d=document.documentElement,t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';d.dataset.theme=t;d.dataset.mode=new RegExp(${JSON.stringify(SAVANT_PATHS)}).test(location.pathname)?'savant':'general'}catch(e){}})()`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${archivo.variable} ${narrow.variable}`}>
+    <html lang="en" className={`${archivo.variable} ${narrow.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: PRE_PAINT }} />
+        {/* Headshots come from the NBA's CDN on nearly every page. */}
+        <link rel="preconnect" href="https://cdn.nba.com" />
+      </head>
       <body className="flex min-h-screen flex-col">
         <a
           href="#main"
@@ -32,27 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        <header style={{ background: 'var(--chrome)' }}>
-          <div className="flex items-center gap-4 px-4 py-3">
-            <Link
-              href="/"
-              className="flex items-baseline text-lg font-extrabold uppercase tracking-tight no-underline"
-              style={{ color: 'var(--ink)' }}
-            >
-              NBA
-              <span className="px-[1px] font-light" style={{ color: 'var(--ink-3)' }}>
-                //
-              </span>
-              Savant
-            </Link>
-
-            <div className="ml-auto flex items-center gap-3">
-              <SiteSearch />
-            </div>
-          </div>
-        </header>
-
-        <SiteNav />
+        <SiteHeader />
 
         <ScoreboardBar />
 
@@ -61,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </main>
 
         <SiteFooter />
+        <Toaster />
       </body>
     </html>
   );

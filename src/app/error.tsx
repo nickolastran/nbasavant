@@ -21,7 +21,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
           type="button"
           onClick={reset}
           className="tab"
-          style={{ background: 'var(--ink)', borderColor: 'var(--ink)', color: '#fff' }}
+          style={{ background: 'var(--ink)', borderColor: 'var(--ink)', color: 'var(--on-ink)' }}
         >
           Try again
         </button>

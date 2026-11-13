@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PlayerLink } from '@/components/PlayerLink';
 import { Headshot } from '@/components/Headshot';
 import { TeamMark } from '@/components/TeamMark';
 
@@ -14,7 +15,7 @@ export type Board = {
 /** One top-N board: ranked rows of team logo, headshot, name and value, and an optional "Complete list" footer. */
 export function LeaderBoard({ board: b, more }: { board: Board; more?: string }) {
   return (
-    <section className="panel overflow-hidden">
+    <section id={b.key} className="panel scroll-mt-28 overflow-hidden">
       <h2 className="eyebrow border-b px-3 py-2" style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}>
         {b.label}
         {b.note && (
@@ -31,9 +32,9 @@ export function LeaderBoard({ board: b, more }: { board: Board; more?: string })
             </span>
             <TeamMark abbr={r.abbr} color={r.color} size={18} />
             <Headshot id={r.playerId} name="" className="h-6 w-6 shrink-0 rounded-full bg-[var(--panel-2)] object-cover object-top" />
-            <Link href={`/players/${r.playerId}`} className="link flex-1 truncate" style={{ color: 'var(--ink)' }}>
+            <PlayerLink id={r.playerId} className="link flex-1 truncate" style={{ color: 'var(--ink)' }}>
               {r.name}
-            </Link>
+            </PlayerLink>
             <span className="tnum font-semibold">{r.value}</span>
           </li>
         ))}

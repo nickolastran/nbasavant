@@ -116,7 +116,7 @@ export function DatePicker({ value, onChange }: { value: string; onChange: (iso:
                 style={{
                   borderColor: iso === today && !on ? 'var(--accent)' : 'transparent',
                   background: on ? 'var(--accent)' : undefined,
-                  color: on ? '#fff' : 'var(--ink)',
+                  color: on ? 'var(--on-ink)' : 'var(--ink)',
                   fontWeight: on ? 700 : 400,
                 }}
               >
