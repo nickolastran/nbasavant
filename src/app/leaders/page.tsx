@@ -58,7 +58,7 @@ export default async function LeadersPage({
       <h1 className="mb-1 text-xl font-bold tracking-tight">Stat Leaders</h1>
       <p className="mb-4 text-sm" style={{ color: 'var(--ink-2)' }}>
         {season?.key}. To qualify: {sp.minGp ? `${minGp} games` : teamGames ? "70% of the team's games so far" : 'no games yet'}; rate
-        boards also need their attempts, and usage, PER and BPM their minutes, prorated to games played (attempts never under a fifth of the full-season number, so a hot first week on a dozen shots can't top a board). Win shares, VORP and the clutch boards are season
+        boards also need their attempts, and usage, PER and BPM their minutes, prorated to games played (attempts never under a fifth of the full-season number, so a hot first week on a dozen shots can&apos;t top a board). Win shares, VORP and the clutch boards are season
         totals and rank everyone. Shot-making, on/off and the clutch come from the play-by-play, 2026-27 on.
       </p>
 

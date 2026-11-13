@@ -27,7 +27,6 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       ? `${line.season.key}: ${fmt(line.ppg)} PTS · ${fmt(line.rpg)} REB · ${fmt(line.apg)} AST`
       : undefined,
     accent: player.team?.primaryColor,
-    // eslint-disable-next-line @next/next/no-img-element
     art: photo ? <img src={photo} width={416} height={304} alt="" /> : undefined,
   });
 }

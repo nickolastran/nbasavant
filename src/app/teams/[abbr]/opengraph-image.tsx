@@ -19,7 +19,6 @@ export default async function Image({ params }: { params: Promise<{ abbr: string
     title: `${team.city} ${team.name}`,
     subtitle: rec && season ? `${season.key}: ${rec.wins}-${rec.losses}` : undefined,
     accent: team.primaryColor,
-    // eslint-disable-next-line @next/next/no-img-element
     art: logo ? <img src={logo} width={280} height={280} alt="" /> : undefined,
   });
 }

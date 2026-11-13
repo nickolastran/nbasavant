@@ -44,7 +44,7 @@ export function ogCard({
         <div style={{ width: 24, height: '100%', background: accent }} />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '64px 72px' }}>
           <div style={{ display: 'flex', fontSize: 30, letterSpacing: 2, textTransform: 'uppercase' }}>
-            NBA<span style={{ color: '#8b8f96', padding: '0 4px' }}>//</span>Savant
+            NBA<span style={{ color: '#8b8f96', padding: '0 4px' }}>{'//'}</span>Savant
           </div>
           <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: 48 }}>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>

@@ -50,7 +50,6 @@ export function FullCourt({
       {/* Paint shaded a touch darker, as on a real floor. */}
       <rect x={0} y={170} width={190} height={160} fill="color-mix(in oklab, var(--hardwood) 22%, transparent)" />
       <rect x={750} y={170} width={190} height={160} fill="color-mix(in oklab, var(--hardwood) 22%, transparent)" />
-      {/* eslint-disable-next-line @next/next/no-img-element -- an SVG <image>, not an <img> */}
       <image href={`/logos/${homeAbbr}.svg`} x={410} y={190} width={120} height={120} opacity={0.9} />
       <g transform="translate(52.5 250) rotate(-90)">
         <CourtLines />

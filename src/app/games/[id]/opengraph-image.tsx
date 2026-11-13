@@ -17,7 +17,6 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const [awayLogo, homeLogo] = await Promise.all([imageData(`/logos/${away}.svg`), imageData(`/logos/${home}.svg`)]);
   const played = game.status.startsWith('Final') || game.homeScore + game.awayScore > 0;
   const day = game.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-  // eslint-disable-next-line @next/next/no-img-element
   const mark = (src: string | null) => (src ? <img src={src} width={150} height={150} alt="" /> : null);
 
   return ogCard({
