@@ -5,7 +5,7 @@ import {
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
   attemptFloor, careerAdvanced, careerTotals, expectedShooting, MIN_TYPE_ATTEMPTS, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
-  activeStreak, nextMilestone, onPace, splitLogs,
+  activeStreak, nextMilestone, onPace, splitLogs, cosineSimilarity,
 } from './stats';
 import { ordinal, shortNames } from './format';
 
@@ -430,3 +430,14 @@ assert.ok(Math.abs(winProbability(4, 600) + winProbability(-4, 600, -2.5) - 1) <
 }
 
 console.log('stats.ts: all checks passed');
+
+// --- Cosine similarity ---------------------------------------------------------
+near(cosineSimilarity([1, 2, 3], [1, 2, 3], 2)!, 1, 1e-9, 'identical profiles');
+near(cosineSimilarity([1, 2, 3], [2, 4, 6], 2)!, 1, 1e-9, 'same shape, different size');
+near(cosineSimilarity([1, 2, 3], [-1, -2, -3], 2)!, -1, 1e-9, 'opposite profiles');
+near(cosineSimilarity([1, 0], [0, 1], 2)!, 0, 1e-9, 'nothing in common');
+// A stat either side lacks is left out of both; too few shared stats is no answer.
+near(cosineSimilarity([1, null, 3, 5], [1, 9, 3, null], 2)!, 1, 1e-9, 'compared on the shared stats only');
+assert.equal(cosineSimilarity([1, null, 3], [null, 2, 3], 2), null, 'one shared stat is not a comparison');
+assert.equal(cosineSimilarity([0, 0], [1, 1], 2), null, 'a flat profile has no direction');
+console.log('stats.ts: similarity checks passed');

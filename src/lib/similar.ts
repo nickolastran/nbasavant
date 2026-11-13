@@ -3,7 +3,7 @@
  * z-scored within its own season, held in memory for an hour.
  */
 import { prisma } from './db';
-import { nearestSeasons, scaledFloor, zBySeason, type SeasonVector } from './stats';
+import { cosineSimilarity, nearestSeasons, scaledFloor, zBySeason, type SeasonVector } from './stats';
 
 /**
  * The box score per 36 minutes, efficiency, usage, shot diet and the two
@@ -79,4 +79,31 @@ export async function similarSeasons(playerId: number, seasonId: number, n = 5) 
   // to a '60s one on everything but the blocks the league didn't count yet.
   const have = target.stats.filter((x) => x !== null).length;
   return nearestSeasons(rows, target, n, Math.ceil(have * 0.75));
+}
+
+/** Stats two profiles must share to be compared. */
+const MIN_SHARED = 9;
+
+/**
+ * This season's players most like one player, by cosine similarity of the
+ * same twelve z-scored stats: who is strong and weak in the same places,
+ * whatever their overall level. Null when he hasn't played enough to compare.
+ */
+export async function similarPlayers(playerId: number, seasonId: number, n = 5) {
+  const season = (await seasonVectors()).filter((r) => r.seasonId === seasonId);
+  const target = season.find((r) => r.playerId === playerId);
+  if (!target) return null;
+  return season
+    .filter((r) => r.playerId !== playerId)
+    .map((r) => ({ playerId: r.playerId, score: cosineSimilarity(target.stats, r.stats, MIN_SHARED) }))
+    .filter((r): r is { playerId: number; score: number } => r.score !== null)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, n);
+}
+
+/** How alike two players' seasons are, -1 to 1, or null if either hasn't played enough. */
+export async function similarity(a: number, b: number, seasonId: number) {
+  const season = (await seasonVectors()).filter((r) => r.seasonId === seasonId);
+  const [x, y] = [season.find((r) => r.playerId === a), season.find((r) => r.playerId === b)];
+  return x && y ? cosineSimilarity(x.stats, y.stats, MIN_SHARED) : null;
 }

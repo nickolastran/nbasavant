@@ -9,6 +9,12 @@ import { FilterBar } from '@/components/FilterBar';
 import { ViewTabs } from '@/components/ViewTabs';
 import { seasonOptions } from '@/lib/options';
 import { fmt, pct3, perGame } from '@/lib/format';
+import { MirrorBars } from '@/components/MirrorBars';
+import { PercentileBars } from '@/components/PercentileBars';
+import { PlayerLink } from '@/components/PlayerLink';
+import { faceoff, percentileCard, teamMirror } from '@/lib/compare';
+import { playerLeaderboard } from '@/lib/leaderboard';
+import { similarPlayers, similarity } from '@/lib/similar';
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   return { title: (await searchParams).view === 'teams' ? 'Compare Teams' : 'Compare Players' };
@@ -192,6 +198,21 @@ async function playerCompare(sp: Record<string, string>, seasonKey: string | und
     return row;
   });
 
+  // Two players: their percentile cards side by side, and how alike their seasons are.
+  const duel =
+    cards.length === 2 && seasonId
+      ? await (async () => {
+          const [rows, score, ...lists] = await Promise.all([
+            playerLeaderboard(seasonId, 'game'),
+            similarity(cards[0].id, cards[1].id, seasonId),
+            similarPlayers(cards[0].id, seasonId, 5),
+            similarPlayers(cards[1].id, seasonId, 5),
+          ]);
+          const nameOf = new Map(rows.map((r) => [r.playerId as number, { name: String(r.player), team: String(r.team ?? '') }]));
+          return { score, lists, nameOf, cards: cards.map((c) => percentileCard(rows, c.id)) };
+        })()
+      : null;
+
   const picked = cards.map((c) => ({ key: String(c.id), name: c.name, color: c.color }));
   if (!cards.length) {
     return {
@@ -211,6 +232,63 @@ async function playerCompare(sp: Record<string, string>, seasonKey: string | und
     picked,
     content: (
       <>
+        {duel && (
+          <>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {cards.map((c, i) => (
+                <PercentileBars
+                  key={i}
+                  title={`${c.name}, ${seasonKey}`}
+                  subtitle={`Against ${duel.cards[i].field} players with a regular role. Red beats the field, blue trails it.`}
+                  rows={duel.cards[i].rows}
+                  empty="No stats this season."
+                />
+              ))}
+            </div>
+            <section className="panel p-4">
+              <h2 className="text-sm font-semibold">How alike are they?</h2>
+              {duel.score === null ? (
+                <p className="mt-1 text-sm" style={{ color: 'var(--ink-3)' }}>
+                  One of them hasn&apos;t played enough this season to compare.
+                </p>
+              ) : (
+                <p className="mt-1 text-sm" style={{ color: 'var(--ink-2)' }}>
+                  <strong className="tnum display text-3xl" style={{ color: 'var(--ink)' }}>
+                    {Math.round(((duel.score + 1) / 2) * 100)}
+                  </strong>{' '}
+                  out of 100.{' '}
+                  {duel.score > 0.6 ? 'Strong and weak in the same places.' : duel.score > 0.2 ? 'Some overlap in what they do.' : duel.score > -0.2 ? 'Little in common.' : 'Close to opposites.'}{' '}
+                  Cosine similarity of twelve stats, each measured against this season&apos;s average: it compares the shape of their games, not how good they are.
+                </p>
+              )}
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                {cards.map((c, i) => (
+                  <div key={c.id}>
+                    <h3 className="eyebrow mb-1">Most similar to {c.name}</h3>
+                    {duel.lists[i]?.length ? (
+                      <ol className="divide-y text-sm">
+                        {duel.lists[i]!.map((m) => (
+                          <li key={m.playerId} className="flex items-center gap-2 py-1.5">
+                            <PlayerLink id={m.playerId} className="link min-w-0 flex-1 truncate">
+                              {duel.nameOf.get(m.playerId)?.name ?? m.playerId}
+                            </PlayerLink>
+                            <span className="eyebrow">{duel.nameOf.get(m.playerId)?.team}</span>
+                            <span className="tnum w-8 text-right font-semibold">{Math.round(((m.score + 1) / 2) * 100)}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="text-sm" style={{ color: 'var(--ink-3)' }}>
+                        Not enough minutes to compare.
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+
         <CompareTable
           columns={cards.map((c) => ({ key: String(c.id), label: `${c.name} · ${c.team}`, color: c.color }))}
           lines={ROWS.map((r) => ({ ...r, values: cards.map((c) => c.values[r.key]) }))}
@@ -313,6 +391,25 @@ async function teamCompare(sp: Record<string, string>, seasonKey: string | undef
     orderBy: { date: 'desc' },
   });
 
+  // Two teams: league ranks for the mirrored bars, and a sample of each one's shots.
+  const duel =
+    teams.length === 2 && seasonRows[0] && seasonRows[1]
+      ? await (async () => {
+          const [league, ...shots] = await Promise.all([
+            prisma.teamStats.findMany({ where: { seasonId: seasonRows[0]!.seasonId } }),
+            ...teams.map((t) =>
+              // Every third shot: plenty for the hex bins, a third of the payload.
+              prisma.$queryRaw<Shot[]>`
+                SELECT x, y, made, value, "distanceFt", zone FROM shot_data
+                WHERE "teamId" = ${t.id} AND "seasonId" = ${seasonRows[0]!.seasonId} AND "eventNum" IS NOT NULL AND id % 3 = 0
+                LIMIT 6000`,
+            ),
+          ]);
+          return { groups: teamMirror(seasonRows[0]!, seasonRows[1]!, league), shots };
+        })()
+      : null;
+  const sides = teams.map((t) => ({ name: t.abbreviation, color: t.primaryColor }));
+
   const trendKeys = [...new Set(teams.flatMap((t) => t.stats.filter((s) => s.netRtg !== null).map((s) => s.season.key)))]
     .sort()
     .slice(-TREND_SEASONS);
@@ -326,6 +423,77 @@ async function teamCompare(sp: Record<string, string>, seasonKey: string | undef
     picked,
     content: (
       <>
+        {duel && (
+          <>
+            <div className="flex items-center justify-between text-sm font-bold">
+              {teams.map((t) => (
+                <span key={t.id} className="flex items-center gap-2">
+                  <TeamMark abbr={t.abbreviation} color={t.primaryColor} size={28} />
+                  {t.city} {t.name}
+                </span>
+              ))}
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              {duel.groups.map((g) => (
+                <MirrorBars key={g.title} title={g.title} rows={g.rows} a={sides[0]} b={sides[1]} />
+              ))}
+            </div>
+            <p className="-mt-3 text-xs" style={{ color: 'var(--ink-3)' }}>
+              Bar length is the league rank in that stat (first is full width); the number and rank are beside it and the better side is bold.
+            </p>
+
+            <section>
+              <h2 className="mb-2 text-sm font-semibold">Four factors, offense against defense</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {[[0, 1], [1, 0]].map(([o, d]) => (
+                  <div key={o} className="panel overflow-x-auto">
+                    <table className="stat-table">
+                      <caption className="eyebrow px-3 py-2 text-left">
+                        {teams[o].abbreviation} offense vs. {teams[d].abbreviation} defense
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th scope="col" style={{ textAlign: 'left', cursor: 'default' }}>Factor</th>
+                          <th scope="col" style={{ cursor: 'default' }}>{teams[o].abbreviation} does</th>
+                          <th scope="col" style={{ cursor: 'default' }}>{teams[d].abbreviation} allows</th>
+                          <th scope="col" style={{ cursor: 'default' }}>Edge</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {faceoff(seasonRows[o]!, seasonRows[d]!).map((f) => {
+                          const gap = f.off === null || f.def === null ? null : (f.off - f.def) * (f.offBetterHigh ? 1 : -1);
+                          return (
+                            <tr key={f.label}>
+                              <td style={{ textAlign: 'left' }}>{f.label}</td>
+                              <td>{fmt(f.off, 1)}</td>
+                              <td>{fmt(f.def, 1)}</td>
+                              <td style={{ fontWeight: 600 }}>
+                                {gap === null ? '—' : Math.abs(gap) < 0.5 ? 'Even' : `${gap > 0 ? teams[o].abbreviation : teams[d].abbreviation} +${Math.abs(gap).toFixed(1)}`}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs" style={{ color: 'var(--ink-3)' }}>
+                What one team&apos;s offense usually does against what the other&apos;s defense usually allows. The edge goes to whichever is further from the other&apos;s norm.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="mb-2 text-sm font-semibold">Shot profiles</h2>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                {teams.map((t, i) => (
+                  <ShotChart key={t.id} shots={duel.shots[i]} title={`${t.city} ${t.name}`} subtitle={`${seasonKey} · sampled`} height={420} />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+
         <CompareTable
           columns={teams.map((t, i) => ({
             key: t.abbreviation,

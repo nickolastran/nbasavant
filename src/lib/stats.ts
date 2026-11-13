@@ -588,6 +588,23 @@ export function nearestSeasons(rows: SeasonVector[], target: SeasonVector, n: nu
   return out.sort((a, b) => a.distance - b.distance).slice(0, n);
 }
 
+/**
+ * Cosine similarity of two stat profiles, -1 to 1, over the stats both have:
+ * 1 is the same shape (strong and weak in the same places), 0 is unrelated,
+ * -1 is opposite. On z-scores an average player is the origin, so this
+ * compares how two players differ from average, not how good they are.
+ * Null with fewer than `minShared` stats in common, or a profile that is flat.
+ */
+export function cosineSimilarity(a: (number | null)[], b: (number | null)[], minShared: number) {
+  let dot = 0, aa = 0, bb = 0, shared = 0;
+  for (let i = 0; i < a.length; i++) {
+    const [x, y] = [a[i], b[i]];
+    if (x === null || y === null || x === undefined || y === undefined) continue;
+    dot += x * y; aa += x * x; bb += y * y; shared++;
+  }
+  return shared < minShared || !aa || !bb ? null : dot / Math.sqrt(aa * bb);
+}
+
 // --- Pace, milestones and streaks ---------------------------------------------
 
 /** A season total carried over the schedule at its rate per team game, so games he misses count against him. */
