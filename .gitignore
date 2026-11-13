@@ -4,3 +4,9 @@ node_modules
 *.log
 next-env.d.ts
 .DS_Store
+
+# Project notes, kept locally
+docs/
+
+# Lighthouse on WSL leaves its Chrome profiles here under Windows-style names
+C:*
