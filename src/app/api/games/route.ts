@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
-import { page, respond } from '@/lib/api';
+import { bad, page, respond } from '@/lib/api';
 import { todayEt } from '@/lib/dates';
 import { syncGame } from '@/lib/sync';
 
@@ -10,6 +10,9 @@ export async function GET(req: NextRequest) {
   const { limit, offset } = page(sp, 25, 200);
   const team = sp.get('team')?.toUpperCase();
   const [before, after] = [sp.get('before'), sp.get('after')];
+  for (const [k, v] of [['date', sp.get('date')], ['before', before], ['after', after]] as const) {
+    if (v && !(/^\d{4}-\d{2}-\d{2}$/.test(v) && Date.parse(v))) return bad(`${k} must be YYYY-MM-DD`);
+  }
 
   // `before`/`after` step to the nearest day that has games, so a caller
   // walking the schedule never lands on an empty off-season date.
