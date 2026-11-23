@@ -53,7 +53,8 @@ export async function GET(req: NextRequest) {
   // (the live write-through only sees today; the cron runs once a day). Save
   // them now so the first visitor sees scores.
   const today = todayEt();
-  const stale = games.filter((g) => !g.status.startsWith('Final') && g.date.toISOString().slice(0, 10) < today);
+  // Postponed games never go final, so healing them would refetch on every request.
+  const stale = games.filter((g) => !g.status.startsWith('Final') && g.status !== 'Postponed' && g.date.toISOString().slice(0, 10) < today);
   if (stale.length) {
     await Promise.all(stale.map((g) => syncGame(prisma, g.gameCode).catch((e) => console.error('heal', g.gameCode, e))));
     games = await query();
