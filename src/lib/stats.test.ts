@@ -4,7 +4,7 @@ import {
   BoxTotals, LEAGUE_2024_25, TeamTotals, astPct, boxPlusMinus, efgPct,
   centerBpm, normalizePer, offRtg, pace, playerDrtg, playerOrtg, possessions, shotDistanceFt, shotZone,
   gameClock, gameScore, gamesBehind, tovPct, winProbability, tsPct, uPer, usgPct, vorp, winPct, winShares,
-  attemptFloor, careerAdvanced, careerTotals, expectedShooting, MIN_TYPE_ATTEMPTS, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings,
+  attemptFloor, careerAdvanced, careerTotals, expectedShooting, MIN_TYPE_ATTEMPTS, nearestSeasons, stintRatings, zBySeason, zLadder, minGames, percentileOf, pythagWins, scaledFloor, standings, recordThrough,
   activeStreak, nextMilestone, onPace, splitLogs, cosineSimilarity,
 } from './stats';
 import { ordinal, shortNames } from './format';
@@ -323,6 +323,17 @@ assert.deepEqual([hot.wins, hot.losses, hot.l10, hot.streak], [10, 2, [10, 0], '
 // Games arrive in any order; streaks are about dates, not input order.
 const shuffled = standings([...run].reverse(), ident).find((r) => r.teamId === 1)!;
 assert.equal(shuffled.streak, 'W10', 'streak is computed in date order');
+
+// Record beside a game: through its own day, not the season's end.
+const results = [
+  { date: '2026-10-20', home: 1, away: 2, homeScore: 100, awayScore: 90 },
+  { date: '2026-10-21', home: 3, away: 1, homeScore: 105, awayScore: 110 },
+  { date: '2026-10-23', home: 1, away: 3, homeScore: 95, awayScore: 100 },
+];
+assert.equal(recordThrough(results, 1, '2026-10-19'), '0-0', 'before the first game');
+assert.equal(recordThrough(results, 1, '2026-10-21'), '2-0', 'includes that day\'s final, home and away wins');
+assert.equal(recordThrough(results, 1, '2026-10-22'), '2-0', 'an off day carries the record');
+assert.equal(recordThrough(results, 3, '2026-10-23'), '1-1', 'a home loss and a road win');
 
 // --- Career rows ------------------------------------------------------------
 // A player whose career straddles 1973-74, when steals and blocks were first

@@ -423,6 +423,17 @@ export type StandingRow = {
   streak: string;
 };
 
+/** A team's W-L from the finals on or before `day`: before tip-off until its own game is final, then including it. */
+export function recordThrough(games: GameResult[], teamId: number, day: string) {
+  let [w, l] = [0, 0];
+  for (const g of games) {
+    if (g.date > day || (g.home !== teamId && g.away !== teamId)) continue;
+    if ((g.home === teamId) === g.homeScore > g.awayScore) w++;
+    else l++;
+  }
+  return `${w}-${l}`;
+}
+
 /**
  * Every split a standings page shows, from final scores alone. Takes regular
  * season finals only; teams in `alignment` with no games come back 0-0.

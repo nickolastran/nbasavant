@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { bad, page, respond } from '@/lib/api';
 import { todayEt } from '@/lib/dates';
 import { syncGame } from '@/lib/sync';
+import { recordThrough, type GameResult } from '@/lib/stats';
 
 /** GET /api/games?season=2026-27&team=BOS&date=2026-10-21&before=&after= */
 export async function GET(req: NextRequest) {
@@ -63,18 +64,30 @@ export async function GET(req: NextRequest) {
     games = await query();
   }
 
-  // Records shown beside each team. One lookup for the whole page of games.
-  // ponytail: season-final W-L, not as-of-tip-off; swap for a games-played-
-  // before-this-date count if in-season back-dating ever needs to be exact.
-  const records = new Map<string, string>();
+  // Records shown beside each team, as of that game's day: the regular-season
+  // finals the standings count. One lookup for the whole page of games.
+  const finals = new Map<number, GameResult[]>();
   if (games.length) {
-    const rows = await prisma.teamStats.findMany({
-      where: { seasonId: { in: [...new Set(games.map((g) => g.seasonId))] } },
-      select: { teamId: true, seasonId: true, wins: true, losses: true },
+    const rows = await prisma.game.findMany({
+      where: {
+        seasonId: { in: [...new Set(games.map((g) => g.seasonId))] },
+        kind: 'regular',
+        status: { startsWith: 'Final' },
+        date: { lte: games[0].date },
+      },
+      select: { seasonId: true, date: true, homeTeamId: true, awayTeamId: true, homeScore: true, awayScore: true },
     });
-    for (const r of rows) records.set(`${r.seasonId}:${r.teamId}`, `${r.wins}-${r.losses}`);
+    for (const r of rows) {
+      if (!finals.has(r.seasonId)) finals.set(r.seasonId, []);
+      finals.get(r.seasonId)!.push({
+        date: r.date.toISOString().slice(0, 10),
+        home: r.homeTeamId, away: r.awayTeamId, homeScore: r.homeScore, awayScore: r.awayScore,
+      });
+    }
   }
-  const record = (seasonId: number, teamId: number) => records.get(`${seasonId}:${teamId}`) ?? '';
+  // Preseason games show no record; the regular season hasn't started.
+  const record = (g: (typeof games)[number], teamId: number) =>
+    g.kind === 'preseason' ? '' : recordThrough(finals.get(g.seasonId) ?? [], teamId, g.date.toISOString().slice(0, 10));
 
   return respond(
     games.map((g) => ({
@@ -92,8 +105,8 @@ export async function GET(req: NextRequest) {
       awayColor: g.awayTeam.primaryColor,
       homeScore: g.homeScore,
       awayScore: g.awayScore,
-      homeRecord: record(g.seasonId, g.homeTeamId),
-      awayRecord: record(g.seasonId, g.awayTeamId),
+      homeRecord: record(g, g.homeTeamId),
+      awayRecord: record(g, g.awayTeamId),
     })),
     sp,
     'games',
