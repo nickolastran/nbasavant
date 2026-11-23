@@ -123,21 +123,52 @@ export async function downloadShareCard(
   ctx.fillRect(0, 0, W, H);
 
   const pad = 48;
+  const foot = H - pad - 22;
+  const bottom = foot - 18 - 16; // The chart stops above the footer's hairline.
   ctx.textBaseline = 'top';
-  ctx.fillStyle = token('--ink', '#16181c');
-  ctx.font = `800 44px ${font}`;
-  ctx.fillText(title, pad, pad, W - pad * 2);
-  let top = pad + 56;
-  if (subtitle) {
-    ctx.fillStyle = token('--ink-2', '#4d525a');
-    ctx.font = `400 22px ${font}`;
-    ctx.fillText(subtitle, pad, top, W - pad * 2);
-    top += 36;
+
+  // Word-wrapped to `maxW`; returns the y below the last line. Measures only, unless `draw`.
+  const wrap = (text: string, y: number, maxW: number, lh: number, draw: boolean) => {
+    let line = '';
+    for (const word of text.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(next).width > maxW) {
+        if (draw) ctx.fillText(line, pad, y);
+        y += lh;
+        line = word;
+      } else line = next;
+    }
+    if (draw) ctx.fillText(line, pad, y);
+    return y + lh;
+  };
+  const header = (maxW: number, draw: boolean) => {
+    ctx.fillStyle = token('--ink', '#16181c');
+    ctx.font = `800 44px ${font}`;
+    let y = wrap(title, pad, maxW, 56, draw);
+    if (subtitle) {
+      ctx.fillStyle = token('--ink-2', '#4d525a');
+      ctx.font = `400 22px ${font}`;
+      y = wrap(subtitle, y, maxW, 30, draw) + 6;
+    }
+    return y + 12;
+  };
+
+  // The chart goes under the header, or beside it when that draws it bigger (a square chart on
+  // the wide card would shrink to half size and lose its thin lines and labels).
+  const top = header(W - pad * 2, false);
+  const under = Math.min((W - pad * 2) / w, (bottom - top) / h);
+  const beside = Math.min((bottom - pad) / h, (W - pad * 2 - 40 - 320) / w); // 40 gap, 320 for the text
+  if (beside > under) {
+    const [cw, ch] = [w * beside, h * beside];
+    header(W - pad * 2 - 40 - cw, true);
+    ctx.drawImage(img, W - pad - cw, pad + (bottom - pad - ch) / 2, cw, ch);
+  } else {
+    header(W - pad * 2, true);
+    const [bw, bh] = [W - pad * 2, bottom - top];
+    ctx.drawImage(img, pad + (bw - w * under) / 2, top + (bh - h * under) / 2, w * under, h * under);
   }
-  top += 12;
 
   // The footer: a hairline, the wordmark on the left, credit and date on the right.
-  const foot = H - pad - 22;
   ctx.fillStyle = token('--line-2', '#c4c2bb');
   ctx.fillRect(pad, foot - 18, W - pad * 2, 1);
   ctx.fillStyle = token('--ink', '#16181c');
@@ -150,10 +181,5 @@ export async function downloadShareCard(
     `Data: NBA.com · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
     W - pad, foot + 2,
   );
-
-  // The chart, as large as fits between the header and the footer, centered.
-  const [bw, bh] = [W - pad * 2, foot - 18 - 16 - top];
-  const k = Math.min(bw / w, bh / h);
-  ctx.drawImage(img, pad + (bw - w * k) / 2, top + (bh - h * k) / 2, w * k, h * k);
   await toPng(canvas, `${filename}-${size}`);
 }
