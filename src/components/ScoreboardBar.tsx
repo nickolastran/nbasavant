@@ -31,7 +31,7 @@ export type Game = {
   /** Filled in from the live feed, for today's games only. */
   state?: LiveState;
   period?: number;
-  /** Scheduled tip-off, ISO UTC, from the live feed. */
+  /** Scheduled tip-off, ISO UTC: the live feed's for today, the schedule's otherwise. */
   start?: string;
   /** Points by period, OT included: the live feed for today, the box score for finals (2026-27 on). */
   homeLine?: number[];
@@ -108,8 +108,7 @@ export function useLive(games: Game[], date: string) {
   }, [recent, date, games]);
 
   // A favorite's games go first; then finals drop to the end; within each group, earliest tip-off first, so a finished day reads in the order it was played.
-  // Past finals have no time on record and keep the database's order.
-  // ponytail: no tip-off column, so a past day isn't sorted; store gameTimeUTC in sync if that matters.
+  // Games from before 2026-27 have no tip-off on record and keep the database's order.
   const tip = (g: Game) => (g.start ? Date.parse(g.start) : tipAt(g.date, g.status)?.getTime()) ?? Infinity;
   const done = (g: Game) => Number(stateOf(g) === 'final');
   const pin = (g: Game) => Number(!isFavorite(g, favs));

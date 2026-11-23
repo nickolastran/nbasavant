@@ -69,8 +69,8 @@ export default async function SchedulePage({
       leaders: l?.state === 'final' ? { home: l.home.leader, away: l.away.leader } : (g.leaders as GameLeaders | null),
       // National outlets only; local ones are marked "(home)" or "(away)".
       tv: ((g.broadcast as Broadcast | null)?.tv ?? []).filter((n) => !/\((home|away)\)$/.test(n)),
-      // The database keeps the scheduled tip-off until the game is final, so it orders live games too.
-      tip: tipAt(day, g.status)?.getTime() ?? Infinity,
+      // The stored tip-off orders finals too; the time in `status` covers a game saved before it was.
+      tip: g.tipoff?.getTime() ?? tipAt(day, g.status)?.getTime() ?? Infinity,
     };
   });
   type Row = (typeof rows)[number];

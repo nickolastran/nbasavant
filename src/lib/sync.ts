@@ -337,6 +337,8 @@ export async function syncSchedule(db: PrismaClient) {
     const final = g.gameStatus === 3;
     const row = {
       date: new Date(`${String(g.gameDateEst).slice(0, 10)}T12:00:00Z`),
+      // A TBD game carries a midnight-ET placeholder, not a time.
+      tipoff: /TBD/i.test(g.gameStatusText) ? null : new Date(g.gameDateTimeUTC),
       homeTeamId: g.homeTeam.teamId as number,
       awayTeamId: g.awayTeam.teamId as number,
       kind,
@@ -351,7 +353,7 @@ export async function syncSchedule(db: PrismaClient) {
     };
     if (!prev) fresh.push({ gameCode: g.gameId, seasonId: season.id, ...row });
     else if (
-      prev.date.getTime() !== row.date.getTime() || prev.status !== row.status || prev.label !== row.label ||
+      prev.date.getTime() !== row.date.getTime() || prev.tipoff?.getTime() !== row.tipoff?.getTime() || prev.status !== row.status || prev.label !== row.label ||
       prev.homeScore !== row.homeScore || prev.awayScore !== row.awayScore ||
       prev.homeTeamId !== row.homeTeamId || prev.awayTeamId !== row.awayTeamId || prev.kind !== row.kind ||
       JSON.stringify(prev.broadcast) !== JSON.stringify(row.broadcast)

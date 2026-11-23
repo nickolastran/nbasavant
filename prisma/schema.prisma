@@ -245,6 +245,8 @@ model Game {
   seasonId   Int
   season     Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   date       DateTime
+  /// Scheduled tip-off, UTC, from the NBA schedule (2026-27 on). Null while TBD.
+  tipoff     DateTime?
   homeTeamId Int
   awayTeamId Int
   homeTeam   Team     @relation("home", fields: [homeTeamId], references: [id])

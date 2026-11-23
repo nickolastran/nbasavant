@@ -95,6 +95,7 @@ export async function GET(req: NextRequest) {
       gameCode: g.gameCode,
       date: g.date.toISOString().slice(0, 10),
       status: g.status,
+      start: g.tipoff?.toISOString(),
       kind: g.kind,
       label: g.label,
       home: g.homeTeam.abbreviation,
